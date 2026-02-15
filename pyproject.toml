@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jp-anki-builder"
+version = "0.1.0"
+description = "Japanese OCR to Anki deck builder"
+requires-python = ">=3.12"
+dependencies = [
+  "typer>=0.12",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
