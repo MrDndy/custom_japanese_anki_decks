@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from typer.testing import CliRunner
+
+from jp_anki_builder.cli import app
+
+
+def test_review_filters_known_words_and_updates_source_seen(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    run_dir = data_dir / "runs" / "run-1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "scan.json").write_text(
+        json.dumps(
+            {
+                "source": "manga-a",
+                "run_id": "run-1",
+                "candidates": ["勇者", "は", "冒険"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (data_dir / "known_words.txt").write_text("勇者\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "review",
+            "--source",
+            "manga-a",
+            "--run-id",
+            "run-1",
+            "--data-dir",
+            str(data_dir),
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads((run_dir / "review.json").read_text(encoding="utf-8"))
+    assert payload["approved_candidates"] == ["冒険"]
+
+    source_seen = json.loads(
+        (data_dir / "sources" / "manga-a" / "seen_words.json").read_text(encoding="utf-8")
+    )
+    assert source_seen["seen_words"] == ["冒険"]
+
+
+def test_review_can_save_manual_exclusions_to_known_words(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    run_dir = data_dir / "runs" / "run-2"
+    run_dir.mkdir(parents=True)
+    (run_dir / "scan.json").write_text(
+        json.dumps(
+            {
+                "source": "manga-a",
+                "run_id": "run-2",
+                "candidates": ["魔法", "剣"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "review",
+            "--source",
+            "manga-a",
+            "--run-id",
+            "run-2",
+            "--data-dir",
+            str(data_dir),
+            "--exclude",
+            "剣",
+            "--save-excluded-to-known",
+        ],
+    )
+
+    assert result.exit_code == 0
+    known = (data_dir / "known_words.txt").read_text(encoding="utf-8")
+    assert "剣" in known

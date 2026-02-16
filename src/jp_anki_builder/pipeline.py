@@ -1,12 +1,77 @@
-﻿class Pipeline:
-    def scan(self) -> str:
-        return "scan"
+from __future__ import annotations
 
-    def review(self) -> str:
-        return "review"
+from dataclasses import dataclass
 
-    def build(self) -> str:
-        return "build"
+from jp_anki_builder.build import run_build
+from jp_anki_builder.review import run_review
+from jp_anki_builder.scan import run_scan
+
+
+@dataclass
+class Pipeline:
+    data_dir: str = "data"
+
+    def scan(self, images: str, source: str, run_id: str, ocr_mode: str = "sidecar") -> dict:
+        summary = run_scan(
+            images=images,
+            source=source,
+            run_id=run_id,
+            base_dir=self.data_dir,
+            ocr_mode=ocr_mode,
+        )
+        return {
+            "stage": "scan",
+            "run_id": summary.run_id,
+            "image_count": summary.image_count,
+            "candidate_count": summary.candidate_count,
+            "artifact_path": str(summary.artifact_path),
+        }
+
+    def review(
+        self,
+        source: str,
+        run_id: str,
+        exclude: list[str] | None = None,
+        save_excluded_to_known: bool = False,
+    ) -> dict:
+        summary = run_review(
+            source=source,
+            run_id=run_id,
+            base_dir=self.data_dir,
+            exclude=exclude,
+            save_excluded_to_known=save_excluded_to_known,
+        )
+        return {
+            "stage": "review",
+            "run_id": summary.run_id,
+            "source": summary.source,
+            "initial_count": summary.initial_count,
+            "approved_count": summary.approved_count,
+            "artifact_path": summary.review_artifact_path,
+        }
+
+    def build(
+        self,
+        source: str,
+        run_id: str,
+        volume: str | None = None,
+        chapter: str | None = None,
+    ) -> dict:
+        summary = run_build(
+            source=source,
+            run_id=run_id,
+            base_dir=self.data_dir,
+            volume=volume,
+            chapter=chapter,
+        )
+        return {
+            "stage": "build",
+            "run_id": summary.run_id,
+            "source": summary.source,
+            "note_count": summary.note_count,
+            "package_path": summary.package_path,
+            "artifact_path": summary.artifact_path,
+        }
 
     def run_all(self) -> list[str]:
-        return [self.scan(), self.review(), self.build()]
+        return ["scan", "review", "build"]
