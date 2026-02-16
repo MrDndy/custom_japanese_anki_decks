@@ -38,6 +38,9 @@ def run_scan(
     run_id: str,
     base_dir: str = "data",
     ocr_mode: str = "sidecar",
+    ocr_language: str = "jpn",
+    tesseract_cmd: str | None = None,
+    preprocess: bool = True,
 ) -> ScanSummary:
     images_path = Path(images)
     files = _collect_images(images_path)
@@ -47,7 +50,12 @@ def run_scan(
     paths = RunPaths(base_dir=base_dir, source_id=source, run_id=run_id)
     paths.run_dir.mkdir(parents=True, exist_ok=True)
 
-    provider = build_ocr_provider(ocr_mode)
+    provider = build_ocr_provider(
+        ocr_mode,
+        language=ocr_language,
+        tesseract_cmd=tesseract_cmd,
+        preprocess=preprocess,
+    )
     records: list[dict] = []
     all_candidates: list[str] = []
 
@@ -68,6 +76,7 @@ def run_scan(
         "source": source,
         "run_id": run_id,
         "ocr_mode": ocr_mode,
+        "ocr_language": ocr_language,
         "image_count": len(files),
         "records": records,
         "candidates": dedup_candidates,

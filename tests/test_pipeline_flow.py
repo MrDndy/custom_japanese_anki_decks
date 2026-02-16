@@ -7,7 +7,10 @@ def test_run_executes_stages_in_order(monkeypatch):
     monkeypatch.setattr(
         p,
         "scan",
-        lambda images, source, run_id, ocr_mode="sidecar": {"stage": "scan", "image_count": 1},
+        lambda images, source, run_id, ocr_mode="sidecar", ocr_language="jpn", tesseract_cmd=None, preprocess=True: {
+            "stage": "scan",
+            "image_count": 1,
+        },
     )
     monkeypatch.setattr(
         p,

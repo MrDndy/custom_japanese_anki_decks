@@ -11,13 +11,25 @@ from jp_anki_builder.scan import run_scan
 class Pipeline:
     data_dir: str = "data"
 
-    def scan(self, images: str, source: str, run_id: str, ocr_mode: str = "sidecar") -> dict:
+    def scan(
+        self,
+        images: str,
+        source: str,
+        run_id: str,
+        ocr_mode: str = "sidecar",
+        ocr_language: str = "jpn",
+        tesseract_cmd: str | None = None,
+        preprocess: bool = True,
+    ) -> dict:
         summary = run_scan(
             images=images,
             source=source,
             run_id=run_id,
             base_dir=self.data_dir,
             ocr_mode=ocr_mode,
+            ocr_language=ocr_language,
+            tesseract_cmd=tesseract_cmd,
+            preprocess=preprocess,
         )
         return {
             "stage": "scan",
@@ -79,12 +91,23 @@ class Pipeline:
         source: str,
         run_id: str,
         ocr_mode: str = "sidecar",
+        ocr_language: str = "jpn",
+        tesseract_cmd: str | None = None,
+        preprocess: bool = True,
         exclude: list[str] | None = None,
         save_excluded_to_known: bool = False,
         volume: str | None = None,
         chapter: str | None = None,
     ) -> dict:
-        scan_result = self.scan(images=images, source=source, run_id=run_id, ocr_mode=ocr_mode)
+        scan_result = self.scan(
+            images=images,
+            source=source,
+            run_id=run_id,
+            ocr_mode=ocr_mode,
+            ocr_language=ocr_language,
+            tesseract_cmd=tesseract_cmd,
+            preprocess=preprocess,
+        )
         review_result = self.review(
             source=source,
             run_id=run_id,

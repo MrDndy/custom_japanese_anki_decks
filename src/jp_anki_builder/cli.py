@@ -13,7 +13,17 @@ def scan(
     source: str = typer.Option(..., help="Top-level source id, e.g. game or manga name."),
     run_id: str = typer.Option(..., help="Unique run id, e.g. mangaa-ch01."),
     data_dir: str = typer.Option("data", help="Data storage directory."),
-    ocr_mode: str = typer.Option("sidecar", help="OCR backend: sidecar or tesseract."),
+    ocr_mode: str = typer.Option("tesseract", help="OCR backend: tesseract or sidecar."),
+    ocr_language: str = typer.Option("jpn", help="OCR language code (tesseract mode)."),
+    tesseract_cmd: str | None = typer.Option(
+        None,
+        help="Optional full path to tesseract executable.",
+    ),
+    no_preprocess: bool = typer.Option(
+        False,
+        "--no-preprocess",
+        help="Disable basic OCR image preprocessing.",
+    ),
 ) -> None:
     """Scan screenshots and produce OCR/candidate artifacts."""
     try:
@@ -22,9 +32,14 @@ def scan(
             source=source,
             run_id=run_id,
             ocr_mode=ocr_mode,
+            ocr_language=ocr_language,
+            tesseract_cmd=tesseract_cmd,
+            preprocess=not no_preprocess,
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc), param_hint="--images") from exc
+    except RuntimeError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--ocr-mode") from exc
 
     typer.echo(f"scan complete: {result['image_count']} image(s), {result['candidate_count']} candidate(s)")
     typer.echo(f"artifact: {result['artifact_path']}")
@@ -88,7 +103,17 @@ def run(
     source: str = typer.Option(..., help="Top-level source id, e.g. game or manga name."),
     run_id: str = typer.Option(..., help="Unique run id, e.g. mangaa-ch01."),
     data_dir: str = typer.Option("data", help="Data storage directory."),
-    ocr_mode: str = typer.Option("sidecar", help="OCR backend: sidecar or tesseract."),
+    ocr_mode: str = typer.Option("tesseract", help="OCR backend: tesseract or sidecar."),
+    ocr_language: str = typer.Option("jpn", help="OCR language code (tesseract mode)."),
+    tesseract_cmd: str | None = typer.Option(
+        None,
+        help="Optional full path to tesseract executable.",
+    ),
+    no_preprocess: bool = typer.Option(
+        False,
+        "--no-preprocess",
+        help="Disable basic OCR image preprocessing.",
+    ),
     exclude: list[str] = typer.Option(None, help="Words to exclude manually (repeatable)."),
     save_excluded_to_known: bool = typer.Option(
         False,
@@ -105,6 +130,9 @@ def run(
             source=source,
             run_id=run_id,
             ocr_mode=ocr_mode,
+            ocr_language=ocr_language,
+            tesseract_cmd=tesseract_cmd,
+            preprocess=not no_preprocess,
             exclude=exclude,
             save_excluded_to_known=save_excluded_to_known,
             volume=volume,

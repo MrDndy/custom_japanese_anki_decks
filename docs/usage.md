@@ -1,52 +1,70 @@
-﻿# Usage Guide
+# Usage Guide
 
-## Commands
+## Current Commands
 
-- `scan` prepares OCR output and token candidates from screenshot inputs.
-- `review` removes particles, known words, and source-seen duplicates, then supports interactive approval.
-- `build` enriches approved words (offline first, online fallback) and maps two card directions.
-- `run` executes `scan -> review -> build`.
+- `scan`: reads screenshots, runs OCR, extracts candidate tokens, writes `scan.json`.
+- `review`: filters candidates (particles, known words, source dedup), writes `review.json`.
+- `build`: enriches approved words and exports Anki deck package (`deck.apkg`).
+- `run`: executes `scan -> review -> build` in one command.
 
-## Known Words
+## OCR Modes
 
-Use `data/known_words.txt` to store words that should be auto-excluded on future runs.
+- `tesseract` (default): real OCR from screenshots.
+- `sidecar`: reads text from `*.txt` files next to images (testing/dev mode).
 
-Optional review behavior can append removals to this file (`save-to-known-list`).
+## Example End-to-End
 
-## Source-Level Dedup
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli run `
+  --images C:\path\to\screenshots `
+  --source my-source `
+  --run-id my-run-001 `
+  --data-dir data `
+  --ocr-mode tesseract `
+  --volume 01 `
+  --chapter 01
+```
 
-Each source keeps a seen-word index at:
+## Review Behavior
 
-- `data/sources/<source_id>/seen_words.json`
+`review` applies these filters in order:
 
-Words approved in one chapter are skipped in later chapters for the same source.
+1. Known words from `data/known_words.txt`
+2. Built-in particles/function words
+3. Words already seen in `data/sources/<source_id>/seen_words.json`
+4. Manual excludes (`--exclude ...`)
 
-## Deck Naming
-
-Deck naming follows:
-
-- `Source::VolumeXX::ChapterYY`
-
-If volume or chapter is missing, omitted levels are not included.
+If `--save-excluded-to-known` is set, manual excludes are appended to `known_words.txt`.
 
 ## Artifacts
 
-Run artifacts are intended to live under:
+Run output directory:
 
-- `data/runs/<run_id>/`
+- `data/runs/<run_id>/scan.json`
+- `data/runs/<run_id>/review.json`
+- `data/runs/<run_id>/build.json`
+- `data/runs/<run_id>/deck.apkg`
 
-These artifacts support resume/review without repeating OCR.
+## Offline Dictionary
 
-## Testing
+Current build step reads:
 
-Run all tests:
+- `data/dictionaries/offline.json`
 
-```bash
-.\.venv\Scripts\python -m pytest -q
+Example shape:
+
+```json
+{
+  "word": {
+    "reading": "reading",
+    "meanings": ["meaning1", "meaning2"]
+  }
+}
 ```
 
-Run CLI help:
+## Verification
 
-```bash
+```powershell
+.\.venv\Scripts\python -m pytest -q
 .\.venv\Scripts\python -m jp_anki_builder.cli --help
 ```

@@ -1,36 +1,156 @@
 # custom_japanese_anki_decks
 
-Python CLI MVP for turning Japanese screenshot text into organized Anki decks.
+CLI tool to turn Japanese screenshot text into Anki decks.
 
-## Setup
+## Quick Start (Windows PowerShell)
 
-```bash
+1. Create and prepare virtual environment:
+
+```powershell
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -U pip
-.\.venv\Scripts\python -m pip install -e . pytest typer
+.\.venv\Scripts\python -m pip install -e .
 ```
 
-## CLI Commands
+2. Confirm CLI works:
 
-```bash
+```powershell
 .\.venv\Scripts\python -m jp_anki_builder.cli --help
-.\.venv\Scripts\python -m jp_anki_builder.cli scan
-.\.venv\Scripts\python -m jp_anki_builder.cli review
-.\.venv\Scripts\python -m jp_anki_builder.cli build
-.\.venv\Scripts\python -m jp_anki_builder.cli run
+```
+
+## Install Tesseract OCR
+
+`scan` and `run` default to `--ocr-mode tesseract`, so install Tesseract first.
+
+### Option A: winget
+
+```powershell
+winget install --id UB-Mannheim.TesseractOCR -e
+```
+
+### Option B: manual install
+
+- Install Tesseract from the UB Mannheim Windows build.
+- Add the Tesseract install folder to your `PATH`.
+
+If needed, you can pass the executable path directly:
+
+```powershell
+--tesseract-cmd "C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
 
 ## Workflow
 
-- `scan`: reads screenshots and prepares OCR/token artifacts.
-- `review`: applies known words + particle filtering and source-level dedup.
-- `build`: enriches words and builds bidirectional card fields for export.
-- `run`: executes `scan -> review -> build`.
+The app is organized in stages:
 
-## Organization Model
+1. `scan` -> OCR + candidate extraction, writes `scan.json`
+2. `review` -> filtering and dedup, writes `review.json`
+3. `build` -> enrichment + `.apkg` export, writes `build.json`
 
-- Hierarchical deck naming target: `Source::VolumeXX::ChapterYY`.
-- Known words list path: `data/known_words.txt`.
-- Source dedup index path: `data/sources/<source_id>/seen_words.json`.
+Run these separately or use one-command `run`.
 
-See `docs/usage.md` for details.
+## Command Guide
+
+### 1) `scan`
+
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli scan `
+  --images C:\path\to\screenshots `
+  --source my-manga `
+  --run-id ch01 `
+  --data-dir data `
+  --ocr-mode tesseract `
+  --ocr-language jpn
+```
+
+Useful options:
+- `--tesseract-cmd <path>`: set explicit tesseract executable path
+- `--no-preprocess`: disable image preprocessing
+- `--ocr-mode sidecar`: dev mode; reads `image.txt` next to `image.png`
+
+### 2) `review`
+
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli review `
+  --source my-manga `
+  --run-id ch01 `
+  --data-dir data `
+  --exclude already_known_word `
+  --save-excluded-to-known
+```
+
+What it does:
+- removes particles and known words
+- removes words already seen in same source
+- stores approved words for build stage
+
+### 3) `build`
+
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli build `
+  --source my-manga `
+  --run-id ch01 `
+  --data-dir data `
+  --volume 01 `
+  --chapter 01
+```
+
+Output:
+- `data/runs/<run_id>/deck.apkg`
+- `data/runs/<run_id>/build.json`
+
+### 4) `run` (all stages)
+
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli run `
+  --images C:\path\to\screenshots `
+  --source my-manga `
+  --run-id ch01 `
+  --data-dir data `
+  --ocr-mode tesseract `
+  --volume 01 `
+  --chapter 01
+```
+
+## Data Files
+
+- Known words list: `data/known_words.txt`
+- Source dedup index: `data/sources/<source_id>/seen_words.json`
+- Run artifacts: `data/runs/<run_id>/`
+
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named 'jp_anki_builder'`
+
+Run:
+
+```powershell
+.\.venv\Scripts\python -m pip install -e .
+```
+
+Then use:
+
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli --help
+```
+
+### `Tesseract executable not found`
+
+- Install Tesseract.
+- Ensure it is on `PATH`, or pass `--tesseract-cmd`.
+
+### OCR not reading text well
+
+- Try higher-resolution screenshots.
+- Keep text horizontal.
+- Toggle preprocessing with/without `--no-preprocess`.
+
+## Development
+
+Run tests:
+
+```powershell
+.\.venv\Scripts\python -m pytest -q
+```
+
+For more details: `docs/usage.md`
