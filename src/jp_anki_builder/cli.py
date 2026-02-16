@@ -33,7 +33,7 @@ def scan(
     source: str = typer.Option(..., help="Top-level source id, e.g. game or manga name."),
     run_id: str = typer.Option(..., help="Unique run id, e.g. mangaa-ch01."),
     data_dir: str = typer.Option("data", help="Data storage directory."),
-    ocr_mode: str = typer.Option("tesseract", help="OCR backend: tesseract or sidecar."),
+    ocr_mode: str = typer.Option("tesseract", help="OCR backend: tesseract, manga-ocr, or sidecar."),
     ocr_language: str = typer.Option("jpn", help="OCR language code (tesseract mode)."),
     tesseract_cmd: str | None = typer.Option(
         None,
@@ -158,7 +158,7 @@ def run(
     source: str = typer.Option(..., help="Top-level source id, e.g. game or manga name."),
     run_id: str = typer.Option(..., help="Unique run id, e.g. mangaa-ch01."),
     data_dir: str = typer.Option("data", help="Data storage directory."),
-    ocr_mode: str = typer.Option("tesseract", help="OCR backend: tesseract or sidecar."),
+    ocr_mode: str = typer.Option("tesseract", help="OCR backend: tesseract, manga-ocr, or sidecar."),
     ocr_language: str = typer.Option("jpn", help="OCR language code (tesseract mode)."),
     tesseract_cmd: str | None = typer.Option(
         None,

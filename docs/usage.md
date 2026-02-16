@@ -10,6 +10,7 @@
 ## OCR Modes
 
 - `tesseract` (default): real OCR from screenshots.
+- `manga-ocr`: model tuned for manga-style Japanese OCR (recommended for manga/game UI text).
 - `sidecar`: reads text from `*.txt` files next to images (testing/dev mode).
 
 ## Tokenization

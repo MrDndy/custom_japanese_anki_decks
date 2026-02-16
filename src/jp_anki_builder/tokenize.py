@@ -68,6 +68,7 @@ def _is_candidate_token(token: str) -> bool:
 def extract_candidates(text: str) -> list[str]:
     tokenizer = _build_word_tokenizer()
     raw_tokens = tokenizer(text) if tokenizer else _regex_tokenize(text)
+    raw_tokens = _augment_noise_corrected_tokens(raw_tokens)
 
     seen: set[str] = set()
     result: list[str] = []
@@ -79,3 +80,22 @@ def extract_candidates(text: str) -> list[str]:
         seen.add(token)
         result.append(token)
     return result
+
+
+def _augment_noise_corrected_tokens(tokens: list[str]) -> list[str]:
+    # OCR sometimes inserts a stray single-particle hiragana inside i-adjectives:
+    # e.g. 痛もい -> 痛, も, い. Add corrected form 痛い as an extra candidate.
+    if len(tokens) < 3:
+        return tokens
+
+    augmented = list(tokens)
+    for i in range(len(tokens) - 2):
+        a, b, c = tokens[i], tokens[i + 1], tokens[i + 2]
+        if (
+            len(a) >= 1
+            and HAS_KANJI_KATA_RE.search(a)
+            and b in PARTICLES
+            and c == "い"
+        ):
+            augmented.append(f"{a}い")
+    return augmented

@@ -18,6 +18,12 @@ Optional (recommended) Japanese tokenizer quality upgrade:
 .\.venv\Scripts\python -m pip install -e ".[japanese_nlp]"
 ```
 
+Optional manga-specific OCR backend (best for manga/game UI text):
+
+```powershell
+.\.venv\Scripts\python -m pip install -e ".[manga_ocr]"
+```
+
 2. Confirm CLI works:
 
 ```powershell
@@ -121,6 +127,7 @@ Useful options:
 - `--tesseract-cmd <path>`: set explicit tesseract executable path
 - `--no-preprocess`: disable image preprocessing
 - `--ocr-mode sidecar`: dev mode; reads `image.txt` next to `image.png`
+- `--ocr-mode manga-ocr`: alternative OCR engine tuned for manga-style Japanese text
 
 ### 2) `review`
 
@@ -163,7 +170,7 @@ Output:
   --source my-manga `
   --run-id ch01 `
   --data-dir data `
-  --ocr-mode tesseract `
+  --ocr-mode manga-ocr `
   --online-dict jisho `
   --volume 01 `
   --chapter 01

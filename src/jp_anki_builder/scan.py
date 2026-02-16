@@ -60,13 +60,22 @@ def run_scan(
     all_candidates: list[str] = []
 
     for image_path in files:
-        text = provider.extract_text(image_path)
-        candidates = extract_candidates(text)
+        if hasattr(provider, "extract_text_candidates"):
+            texts = provider.extract_text_candidates(image_path, top_n=8)
+        else:
+            texts = [provider.extract_text(image_path)]
+
+        text = texts[0] if texts else ""
+        candidates: list[str] = []
+        for candidate_text in texts:
+            candidates.extend(extract_candidates(candidate_text))
+        candidates = list(dict.fromkeys(candidates))
         all_candidates.extend(candidates)
         records.append(
             {
                 "image": str(image_path),
                 "text": text,
+                "alternate_texts": texts[1:6],
                 "candidates": candidates,
             }
         )
