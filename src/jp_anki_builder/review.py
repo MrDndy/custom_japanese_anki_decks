@@ -17,6 +17,14 @@ class ReviewSummary:
     review_artifact_path: str
 
 
+@dataclass
+class ReviewPlan:
+    source: str
+    run_id: str
+    initial_candidates: list[str]
+    filtered_candidates: list[str]
+
+
 def _load_words_file(path) -> set[str]:
     if not path.exists():
         return set()
@@ -51,18 +59,13 @@ def run_review(
     base_dir: str = "data",
     exclude: list[str] | None = None,
     save_excluded_to_known: bool = False,
+    review_plan: ReviewPlan | None = None,
 ) -> ReviewSummary:
     paths = RunPaths(base_dir=base_dir, source_id=source, run_id=run_id)
-    if not paths.scan_artifact.exists():
-        raise ValueError(f"scan artifact not found: {paths.scan_artifact}")
-
-    scan_payload = json.loads(paths.scan_artifact.read_text(encoding="utf-8-sig"))
-    candidates = scan_payload.get("candidates", [])
-
-    known_words = _load_words_file(paths.known_words)
+    plan = review_plan or prepare_review(source=source, run_id=run_id, base_dir=base_dir)
+    candidates = plan.initial_candidates
+    deduped = plan.filtered_candidates
     seen_words = _load_seen_words(paths.source_seen_words)
-    filtered = filter_tokens(candidates, known_words=known_words)
-    deduped = exclude_seen(filtered, seen_words)
 
     excluded_manual = set(exclude or [])
     approved = [word for word in deduped if word not in excluded_manual]
@@ -92,4 +95,24 @@ def run_review(
         initial_count=len(candidates),
         approved_count=len(approved),
         review_artifact_path=str(paths.review_artifact),
+    )
+
+
+def prepare_review(source: str, run_id: str, base_dir: str = "data") -> ReviewPlan:
+    paths = RunPaths(base_dir=base_dir, source_id=source, run_id=run_id)
+    if not paths.scan_artifact.exists():
+        raise ValueError(f"scan artifact not found: {paths.scan_artifact}")
+
+    scan_payload = json.loads(paths.scan_artifact.read_text(encoding="utf-8-sig"))
+    candidates = scan_payload.get("candidates", [])
+    known_words = _load_words_file(paths.known_words)
+    seen_words = _load_seen_words(paths.source_seen_words)
+    filtered = filter_tokens(candidates, known_words=known_words)
+    deduped = exclude_seen(filtered, seen_words)
+
+    return ReviewPlan(
+        source=source,
+        run_id=run_id,
+        initial_candidates=candidates,
+        filtered_candidates=deduped,
     )

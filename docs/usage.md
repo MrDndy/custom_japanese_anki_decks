@@ -41,6 +41,11 @@
 
 If `--save-excluded-to-known` is set, manual excludes are appended to `known_words.txt`.
 
+Interactive mode:
+
+- Use `review --interactive` to see filtered candidates and exclude by index.
+- You can confirm saving excluded words to known words during the prompt flow.
+
 ## Artifacts
 
 Run output directory:
@@ -55,6 +60,11 @@ Run output directory:
 Current build step reads:
 
 - `data/dictionaries/offline.json`
+
+Optional online fallback:
+
+- `--online-dict off` (default)
+- `--online-dict jisho` (queries Jisho API for missing words)
 
 Example shape:
 

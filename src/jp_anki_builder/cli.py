@@ -3,8 +3,28 @@ from __future__ import annotations
 import typer
 
 from jp_anki_builder.pipeline import Pipeline
+from jp_anki_builder.review import prepare_review
 
 app = typer.Typer()
+
+
+def _parse_selected_indices(raw: str, max_value: int) -> list[int]:
+    raw = raw.strip()
+    if not raw:
+        return []
+
+    indices: list[int] = []
+    for chunk in raw.split(","):
+        part = chunk.strip()
+        if not part:
+            continue
+        if not part.isdigit():
+            raise ValueError(f"Invalid index value: {part}")
+        index = int(part)
+        if index < 1 or index > max_value:
+            raise ValueError(f"Index out of range: {index}")
+        indices.append(index)
+    return sorted(set(indices))
 
 
 @app.command()
@@ -51,6 +71,11 @@ def review(
     run_id: str = typer.Option(..., help="Run id created by scan."),
     data_dir: str = typer.Option("data", help="Data storage directory."),
     exclude: list[str] = typer.Option(None, help="Words to exclude manually (repeatable)."),
+    interactive: bool = typer.Option(
+        False,
+        "--interactive",
+        help="Show candidate list and choose exclusions by index.",
+    ),
     save_excluded_to_known: bool = typer.Option(
         False,
         "--save-excluded-to-known",
@@ -58,10 +83,38 @@ def review(
     ),
 ) -> None:
     """Review and approve candidate words."""
+    manual_excludes = set(exclude or [])
+
+    if interactive:
+        plan = prepare_review(source=source, run_id=run_id, base_dir=data_dir)
+        typer.echo("Filtered candidates:")
+        for idx, word in enumerate(plan.filtered_candidates, start=1):
+            typer.echo(f"{idx}. {word}")
+
+        if plan.filtered_candidates:
+            selection = typer.prompt(
+                "Enter indices to exclude (comma-separated, blank for none)",
+                default="",
+                show_default=False,
+            )
+            try:
+                selected_indices = _parse_selected_indices(selection, len(plan.filtered_candidates))
+            except ValueError as exc:
+                raise typer.BadParameter(str(exc), param_hint="--interactive") from exc
+
+            for idx in selected_indices:
+                manual_excludes.add(plan.filtered_candidates[idx - 1])
+
+            if manual_excludes and not save_excluded_to_known:
+                save_excluded_to_known = typer.confirm(
+                    "Save excluded words to known_words.txt?",
+                    default=False,
+                )
+
     result = Pipeline(data_dir=data_dir).review(
         source=source,
         run_id=run_id,
-        exclude=exclude,
+        exclude=sorted(manual_excludes),
         save_excluded_to_known=save_excluded_to_known,
     )
     typer.echo(
@@ -78,6 +131,7 @@ def build(
     data_dir: str = typer.Option("data", help="Data storage directory."),
     volume: str | None = typer.Option(None, help="Optional volume label, e.g. 02."),
     chapter: str | None = typer.Option(None, help="Optional chapter label, e.g. 07."),
+    online_dict: str = typer.Option("off", help="Online fallback dictionary: off or jisho."),
 ) -> None:
     """Build Anki package from approved words."""
     try:
@@ -86,6 +140,7 @@ def build(
             run_id=run_id,
             volume=volume,
             chapter=chapter,
+            online_dict=online_dict,
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc), param_hint="--run-id") from exc
@@ -122,6 +177,7 @@ def run(
     ),
     volume: str | None = typer.Option(None, help="Optional volume label, e.g. 02."),
     chapter: str | None = typer.Option(None, help="Optional chapter label, e.g. 07."),
+    online_dict: str = typer.Option("off", help="Online fallback dictionary: off or jisho."),
 ) -> None:
     """Run scan -> review -> build."""
     try:
@@ -137,6 +193,7 @@ def run(
             save_excluded_to_known=save_excluded_to_known,
             volume=volume,
             chapter=chapter,
+            online_dict=online_dict,
         )
     except (ValueError, RuntimeError) as exc:
         raise typer.BadParameter(str(exc)) from exc

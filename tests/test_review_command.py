@@ -83,3 +83,41 @@ def test_review_can_save_manual_exclusions_to_known_words(tmp_path: Path):
     assert result.exit_code == 0
     known = (data_dir / "known_words.txt").read_text(encoding="utf-8")
     assert "剣" in known
+
+
+def test_review_interactive_exclude_and_save(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    run_dir = data_dir / "runs" / "run-3"
+    run_dir.mkdir(parents=True)
+    (run_dir / "scan.json").write_text(
+        json.dumps(
+            {
+                "source": "manga-a",
+                "run_id": "run-3",
+                "candidates": ["勇者", "冒険"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "review",
+            "--source",
+            "manga-a",
+            "--run-id",
+            "run-3",
+            "--data-dir",
+            str(data_dir),
+            "--interactive",
+        ],
+        input="2\ny\n",
+    )
+
+    assert result.exit_code == 0
+    review_payload = json.loads((run_dir / "review.json").read_text(encoding="utf-8"))
+    assert review_payload["approved_candidates"] == ["勇者"]
+    known = (data_dir / "known_words.txt").read_text(encoding="utf-8")
+    assert "冒険" in known

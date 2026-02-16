@@ -7,7 +7,7 @@ from pathlib import Path
 
 from jp_anki_builder.cards import build_bidirectional_fields, build_deck_name
 from jp_anki_builder.config import RunPaths
-from jp_anki_builder.dictionary import NullOnlineDictionary, OfflineJsonDictionary
+from jp_anki_builder.dictionary import JishoOnlineDictionary, NullOnlineDictionary, OfflineJsonDictionary
 from jp_anki_builder.enrich import enrich_word
 
 
@@ -31,6 +31,7 @@ def run_build(
     base_dir: str = "data",
     volume: str | None = None,
     chapter: str | None = None,
+    online_dict: str = "off",
 ) -> BuildSummary:
     paths = RunPaths(base_dir=base_dir, source_id=source, run_id=run_id)
     if not paths.review_artifact.exists():
@@ -40,7 +41,13 @@ def run_build(
     approved_words = payload.get("approved_candidates", [])
 
     offline = OfflineJsonDictionary(Path(base_dir) / "dictionaries" / "offline.json")
-    online = NullOnlineDictionary()
+    if online_dict == "off":
+        online = NullOnlineDictionary()
+    elif online_dict == "jisho":
+        online = JishoOnlineDictionary()
+    else:
+        raise ValueError("unsupported online dictionary mode. Use: off or jisho.")
+
     enriched = [enrich_word(word, offline=offline, online=online, max_meanings=3) for word in approved_words]
 
     try:
@@ -89,6 +96,7 @@ def run_build(
         "approved_word_count": len(approved_words),
         "note_count": len(deck.notes),
         "package_path": str(paths.deck_package),
+        "online_dict": online_dict,
         "enriched": enriched,
     }
     paths.build_artifact.write_text(

@@ -23,7 +23,7 @@ def test_run_executes_stages_in_order(monkeypatch):
     monkeypatch.setattr(
         p,
         "build",
-        lambda source, run_id, volume=None, chapter=None: {
+        lambda source, run_id, volume=None, chapter=None, online_dict="off": {
             "stage": "build",
             "note_count": 2,
             "package_path": "out.apkg",

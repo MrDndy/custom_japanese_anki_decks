@@ -68,6 +68,7 @@ class Pipeline:
         run_id: str,
         volume: str | None = None,
         chapter: str | None = None,
+        online_dict: str = "off",
     ) -> dict:
         summary = run_build(
             source=source,
@@ -75,6 +76,7 @@ class Pipeline:
             base_dir=self.data_dir,
             volume=volume,
             chapter=chapter,
+            online_dict=online_dict,
         )
         return {
             "stage": "build",
@@ -98,6 +100,7 @@ class Pipeline:
         save_excluded_to_known: bool = False,
         volume: str | None = None,
         chapter: str | None = None,
+        online_dict: str = "off",
     ) -> dict:
         scan_result = self.scan(
             images=images,
@@ -119,6 +122,7 @@ class Pipeline:
             run_id=run_id,
             volume=volume,
             chapter=chapter,
+            online_dict=online_dict,
         )
         return {
             "scan": scan_result,

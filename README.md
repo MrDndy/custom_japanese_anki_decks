@@ -81,6 +81,7 @@ Useful options:
   --source my-manga `
   --run-id ch01 `
   --data-dir data `
+  --interactive `
   --exclude already_known_word `
   --save-excluded-to-known
 ```
@@ -97,6 +98,7 @@ What it does:
   --source my-manga `
   --run-id ch01 `
   --data-dir data `
+  --online-dict jisho `
   --volume 01 `
   --chapter 01
 ```
@@ -114,6 +116,7 @@ Output:
   --run-id ch01 `
   --data-dir data `
   --ocr-mode tesseract `
+  --online-dict jisho `
   --volume 01 `
   --chapter 01
 ```
