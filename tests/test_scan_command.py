@@ -15,7 +15,7 @@ def test_scan_writes_artifact_from_sidecar_ocr(tmp_path: Path):
     images_dir.mkdir()
     image = images_dir / "panel1.png"
     image.write_bytes(b"fake")
-    image.with_suffix(".txt").write_text("冒険に行く 勇者", encoding="utf-8")
+    image.with_suffix(".txt").write_text("\u5192\u967a\u306b\u884c\u304f \u52c7\u8005", encoding="utf-8")
 
     data_dir = tmp_path / "data"
 
@@ -43,8 +43,9 @@ def test_scan_writes_artifact_from_sidecar_ocr(tmp_path: Path):
     payload = json.loads(artifact.read_text(encoding="utf-8"))
     assert payload["source"] == "manga-a"
     assert payload["image_count"] == 1
-    assert "冒険に行く" in payload["candidates"]
-    assert "勇者" in payload["candidates"]
+    assert "\u5192\u967a" in payload["candidates"]
+    assert "\u884c\u304f" in payload["candidates"]
+    assert "\u52c7\u8005" in payload["candidates"]
 
 
 def test_scan_errors_when_no_images_found(tmp_path: Path):
@@ -72,7 +73,7 @@ def test_scan_sidecar_supports_utf8_bom(tmp_path: Path):
     images_dir.mkdir()
     image = images_dir / "panel1.png"
     image.write_bytes(b"fake")
-    image.with_suffix(".txt").write_text("冒険", encoding="utf-8-sig")
+    image.with_suffix(".txt").write_text("\u5192\u967a", encoding="utf-8-sig")
 
     result = CliRunner().invoke(
         app,

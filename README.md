@@ -73,11 +73,22 @@ Then close and reopen your terminal.
 
 You should see `jpn` in the list.
 
+Recommended: also install `jpn_vert` for better handling of vertical Japanese text.
+
 4. If `jpn` is missing, install it:
 
 ```powershell
 $url = "https://github.com/tesseract-ocr/tessdata_best/raw/main/jpn.traineddata"
 $dest = "C:\Program Files\Tesseract-OCR\tessdata\jpn.traineddata"
+Invoke-WebRequest -Uri $url -OutFile $dest
+& "C:\Program Files\Tesseract-OCR\tesseract.exe" --list-langs
+```
+
+If `jpn_vert` is missing, install it the same way:
+
+```powershell
+$url = "https://github.com/tesseract-ocr/tessdata_best/raw/main/jpn_vert.traineddata"
+$dest = "C:\Program Files\Tesseract-OCR\tessdata\jpn_vert.traineddata"
 Invoke-WebRequest -Uri $url -OutFile $dest
 & "C:\Program Files\Tesseract-OCR\tesseract.exe" --list-langs
 ```

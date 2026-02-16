@@ -18,4 +18,11 @@ def test_extract_candidates_falls_back_to_regex_when_tokenizer_unavailable(monke
     monkeypatch.setattr(tokenize, "_build_word_tokenizer", lambda: None)
 
     result = tokenize.extract_candidates("冒険に行く勇者")
-    assert result == ["冒険に行く勇者"]
+    assert result == ["冒険", "行く勇者"]
+
+
+def test_extract_candidates_fallback_splits_particle_sentence(monkeypatch):
+    monkeypatch.setattr(tokenize, "_build_word_tokenizer", lambda: None)
+
+    result = tokenize.extract_candidates("足が痛い")
+    assert result == ["足", "痛い"]
