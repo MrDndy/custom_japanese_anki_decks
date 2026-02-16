@@ -26,7 +26,6 @@ class OcrCandidate:
     confidence: float
     config: str
     preprocessed: bool
-    language: str
 
 
 @dataclass
@@ -49,28 +48,22 @@ class TesseractOcrProvider:
             pytesseract.pytesseract.tesseract_cmd = self.tesseract_cmd
 
         image = Image.open(image_path)
-        variants = self._preprocess_variants(image) if self.preprocess else [("orig", image)]
-        configs = ["--oem 1 --psm 6", "--oem 1 --psm 7", "--oem 1 --psm 11"]
-        langs = self._language_variants(self.language)
+        prepared = self._preprocess_image(image) if self.preprocess else image
+        configs = ["--oem 1 --psm 6", "--oem 1 --psm 7"]
         candidates: list[OcrCandidate] = []
         errors: list[Exception] = []
 
         for config in configs:
-            for lang in langs:
-                for variant_name, variant in variants:
-                    try:
-                        candidate = self._ocr_candidate(
-                            pytesseract,
-                            variant,
-                            config,
-                            preprocessed=(variant_name != "orig"),
-                            language=lang,
-                        )
-                    except Exception as exc:
-                        errors.append(exc)
-                        continue
-                    if candidate.text:
-                        candidates.append(candidate)
+            for variant, is_preprocessed in ((image, False), (prepared, True)):
+                if is_preprocessed and not self.preprocess:
+                    continue
+                try:
+                    candidate = self._ocr_candidate(pytesseract, variant, config, is_preprocessed)
+                except Exception as exc:
+                    errors.append(exc)
+                    continue
+                if candidate.text:
+                    candidates.append(candidate)
 
         if not candidates:
             if errors:
@@ -81,41 +74,22 @@ class TesseractOcrProvider:
         return best.text
 
     @staticmethod
-    def _preprocess_variants(image):
+    def _preprocess_image(image):
         # 1) grayscale for cleaner text extraction
         # 2) light upscale to improve OCR on small screenshots
         # 3) binary threshold to improve contrast on noisy backgrounds
         width, height = image.size
-        gray = image.convert("L")
-        upscaled = gray.resize((width * 2, height * 2))
-        return [
-            ("orig", image),
-            ("gray_up_160", upscaled.point(lambda p: 255 if p > 160 else 0)),
-            ("gray_up_180", upscaled.point(lambda p: 255 if p > 180 else 0)),
-            ("gray_up_200", upscaled.point(lambda p: 255 if p > 200 else 0)),
-        ]
+        upscaled = image.convert("L").resize((width * 2, height * 2))
+        return upscaled.point(lambda p: 255 if p > 180 else 0)
 
     @staticmethod
     def _normalize_text(text: str) -> str:
-        compact = re.sub(r"\s+", " ", text).strip()
-        # Tesseract often inserts spaces between JP chars; collapse those to restore words.
-        return re.sub(
-            r"(?<=[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff])\s+(?=[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff])",
-            "",
-            compact,
-        )
+        return re.sub(r"\s+", " ", text).strip()
 
-    @staticmethod
-    def _language_variants(language: str) -> list[str]:
-        variants = [language]
-        if language == "jpn":
-            variants.append("jpn+jpn_vert")
-        return variants
-
-    def _ocr_candidate(self, pytesseract, image, config: str, preprocessed: bool, language: str) -> OcrCandidate:
+    def _ocr_candidate(self, pytesseract, image, config: str, preprocessed: bool) -> OcrCandidate:
         data = pytesseract.image_to_data(
             image,
-            lang=language,
+            lang=self.language,
             config=config,
             output_type=pytesseract.Output.DICT,
         )
@@ -136,13 +110,7 @@ class TesseractOcrProvider:
 
         text = self._normalize_text(" ".join(tokens))
         avg_conf = sum(confs) / len(confs) if confs else 0.0
-        return OcrCandidate(
-            text=text,
-            confidence=avg_conf,
-            config=config,
-            preprocessed=preprocessed,
-            language=language,
-        )
+        return OcrCandidate(text=text, confidence=avg_conf, config=config, preprocessed=preprocessed)
 
     @staticmethod
     def _score_candidate(candidate: OcrCandidate) -> float:
