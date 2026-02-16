@@ -45,6 +45,43 @@ If needed, you can pass the executable path directly:
 --tesseract-cmd "C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
 
+### Required post-install checks (Windows)
+
+1. Verify executable:
+
+```powershell
+& "C:\Program Files\Tesseract-OCR\tesseract.exe" --version
+```
+
+2. Add Tesseract to your **User PATH** (if `tesseract` is not recognized):
+
+```powershell
+$tDir = "C:\Program Files\Tesseract-OCR"
+$userPath = [Environment]::GetEnvironmentVariable("Path","User")
+if ($userPath -notlike "*$tDir*") {
+  [Environment]::SetEnvironmentVariable("Path", "$userPath;$tDir", "User")
+}
+```
+
+Then close and reopen your terminal.
+
+3. Verify language data:
+
+```powershell
+& "C:\Program Files\Tesseract-OCR\tesseract.exe" --list-langs
+```
+
+You should see `jpn` in the list.
+
+4. If `jpn` is missing, install it:
+
+```powershell
+$url = "https://github.com/tesseract-ocr/tessdata_best/raw/main/jpn.traineddata"
+$dest = "C:\Program Files\Tesseract-OCR\tessdata\jpn.traineddata"
+Invoke-WebRequest -Uri $url -OutFile $dest
+& "C:\Program Files\Tesseract-OCR\tesseract.exe" --list-langs
+```
+
 ## Workflow
 
 The app is organized in stages:
@@ -147,6 +184,23 @@ Then use:
 
 - Install Tesseract.
 - Ensure it is on `PATH`, or pass `--tesseract-cmd`.
+
+Quick fix command:
+
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli scan `
+  --images C:\path\to\screenshots `
+  --source test `
+  --run-id test `
+  --ocr-mode tesseract `
+  --tesseract-cmd "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+### `Error opening data file ... jpn.traineddata`
+
+Install Japanese language data (`jpn.traineddata`) into:
+
+- `C:\Program Files\Tesseract-OCR\tessdata\`
 
 ### OCR not reading text well
 
