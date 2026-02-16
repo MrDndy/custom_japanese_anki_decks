@@ -12,6 +12,12 @@ python -m venv .venv
 .\.venv\Scripts\python -m pip install -e .
 ```
 
+Optional (recommended) Japanese tokenizer quality upgrade:
+
+```powershell
+.\.venv\Scripts\python -m pip install -e ".[japanese_nlp]"
+```
+
 2. Confirm CLI works:
 
 ```powershell
@@ -144,6 +150,16 @@ Then use:
 - Try higher-resolution screenshots.
 - Keep text horizontal.
 - Toggle preprocessing with/without `--no-preprocess`.
+
+### Candidate extraction quality is low
+
+Install tokenizer extras:
+
+```powershell
+.\.venv\Scripts\python -m pip install -e ".[japanese_nlp]"
+```
+
+Without these extras, the app falls back to regex chunk extraction.
 
 ## Development
 

@@ -12,6 +12,11 @@
 - `tesseract` (default): real OCR from screenshots.
 - `sidecar`: reads text from `*.txt` files next to images (testing/dev mode).
 
+## Tokenization
+
+- Preferred path: install `fugashi` + `unidic-lite` (`.[japanese_nlp]`) for word-level extraction.
+- Fallback path: regex chunk extraction when tokenizer deps are unavailable.
+
 ## Example End-to-End
 
 ```powershell
