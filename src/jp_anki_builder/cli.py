@@ -83,9 +83,43 @@ def build(
 
 
 @app.command()
-def run() -> None:
+def run(
+    images: str = typer.Option(..., help="Image file or directory path."),
+    source: str = typer.Option(..., help="Top-level source id, e.g. game or manga name."),
+    run_id: str = typer.Option(..., help="Unique run id, e.g. mangaa-ch01."),
+    data_dir: str = typer.Option("data", help="Data storage directory."),
+    ocr_mode: str = typer.Option("sidecar", help="OCR backend: sidecar or tesseract."),
+    exclude: list[str] = typer.Option(None, help="Words to exclude manually (repeatable)."),
+    save_excluded_to_known: bool = typer.Option(
+        False,
+        "--save-excluded-to-known",
+        help="Append manually excluded words to known_words.txt.",
+    ),
+    volume: str | None = typer.Option(None, help="Optional volume label, e.g. 02."),
+    chapter: str | None = typer.Option(None, help="Optional chapter label, e.g. 07."),
+) -> None:
     """Run scan -> review -> build."""
-    Pipeline().run_all()
+    try:
+        result = Pipeline(data_dir=data_dir).run_all(
+            images=images,
+            source=source,
+            run_id=run_id,
+            ocr_mode=ocr_mode,
+            exclude=exclude,
+            save_excluded_to_known=save_excluded_to_known,
+            volume=volume,
+            chapter=chapter,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    typer.echo(
+        "run complete: "
+        f"{result['scan']['image_count']} image(s), "
+        f"{result['review']['approved_count']} approved candidate(s), "
+        f"{result['build']['note_count']} note(s)"
+    )
+    typer.echo(f"package: {result['build']['package_path']}")
 
 
 if __name__ == "__main__":

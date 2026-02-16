@@ -73,5 +73,32 @@ class Pipeline:
             "artifact_path": summary.artifact_path,
         }
 
-    def run_all(self) -> list[str]:
-        return ["scan", "review", "build"]
+    def run_all(
+        self,
+        images: str,
+        source: str,
+        run_id: str,
+        ocr_mode: str = "sidecar",
+        exclude: list[str] | None = None,
+        save_excluded_to_known: bool = False,
+        volume: str | None = None,
+        chapter: str | None = None,
+    ) -> dict:
+        scan_result = self.scan(images=images, source=source, run_id=run_id, ocr_mode=ocr_mode)
+        review_result = self.review(
+            source=source,
+            run_id=run_id,
+            exclude=exclude,
+            save_excluded_to_known=save_excluded_to_known,
+        )
+        build_result = self.build(
+            source=source,
+            run_id=run_id,
+            volume=volume,
+            chapter=chapter,
+        )
+        return {
+            "scan": scan_result,
+            "review": review_result,
+            "build": build_result,
+        }
