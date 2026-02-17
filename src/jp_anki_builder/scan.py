@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from jp_anki_builder.config import RunPaths
+from jp_anki_builder.dictionary import JishoOnlineDictionary, NullOnlineDictionary, OfflineJsonDictionary
 from jp_anki_builder.ocr import build_ocr_provider
-from jp_anki_builder.tokenize import extract_candidates
+from jp_anki_builder.tokenize import extract_candidates, extract_token_sequence
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
@@ -17,6 +18,7 @@ class ScanSummary:
     run_id: str
     image_count: int
     candidate_count: int
+    candidates: list[str]
     artifact_path: Path
 
 
@@ -41,6 +43,7 @@ def run_scan(
     ocr_language: str = "jpn",
     tesseract_cmd: str | None = None,
     preprocess: bool = True,
+    online_dict: str = "off",
 ) -> ScanSummary:
     images_path = Path(images)
     files = _collect_images(images_path)
@@ -56,6 +59,24 @@ def run_scan(
         tesseract_cmd=tesseract_cmd,
         preprocess=preprocess,
     )
+    offline = OfflineJsonDictionary(Path(base_dir) / "dictionaries" / "offline.json")
+    if online_dict == "off":
+        online = NullOnlineDictionary()
+    elif online_dict == "jisho":
+        online = JishoOnlineDictionary()
+    else:
+        raise ValueError("unsupported online dictionary mode. Use: off or jisho.")
+
+    exists_cache: dict[str, bool] = {}
+
+    def word_exists(word: str) -> bool:
+        if word in exists_cache:
+            return exists_cache[word]
+        hit = offline.lookup(word, exact_match=True) is not None
+        if not hit:
+            hit = online.lookup(word, exact_match=True) is not None
+        exists_cache[word] = hit
+        return hit
     records: list[dict] = []
     all_candidates: list[str] = []
 
@@ -68,7 +89,10 @@ def run_scan(
         text = texts[0] if texts else ""
         candidates: list[str] = []
         for candidate_text in texts:
-            candidates.extend(extract_candidates(candidate_text))
+            sequence = extract_token_sequence(candidate_text)
+            base = extract_candidates(candidate_text)
+            candidates.extend(base)
+            candidates.extend(_merge_compound_candidates(sequence, set(base), word_exists))
         candidates = list(dict.fromkeys(candidates))
         all_candidates.extend(candidates)
         records.append(
@@ -86,6 +110,7 @@ def run_scan(
         "run_id": run_id,
         "ocr_mode": ocr_mode,
         "ocr_language": ocr_language,
+        "online_dict": online_dict,
         "image_count": len(files),
         "records": records,
         "candidates": dedup_candidates,
@@ -100,5 +125,19 @@ def run_scan(
         run_id=run_id,
         image_count=len(files),
         candidate_count=len(dedup_candidates),
+        candidates=dedup_candidates,
         artifact_path=paths.scan_artifact,
     )
+
+
+def _merge_compound_candidates(token_sequence: list[str], candidate_set: set[str], exists_fn) -> list[str]:
+    merged: list[str] = []
+    for i in range(len(token_sequence) - 1):
+        left = token_sequence[i]
+        right = token_sequence[i + 1]
+        if left not in candidate_set or right not in candidate_set:
+            continue
+        compound = left + right
+        if exists_fn(compound):
+            merged.append(compound)
+    return list(dict.fromkeys(merged))

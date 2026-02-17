@@ -109,6 +109,26 @@ The app is organized in stages:
 
 Run these separately or use one-command `run`.
 
+`run` now has stage gates:
+- stops after `scan` if zero candidates are detected
+- stops after `review` if zero approved words remain
+- only reaches `build` when there is something actionable
+
+## Install Offline Dictionary (Recommended)
+
+If `--online-dict off` returns no meanings, your offline dictionary is likely missing.
+
+Install JMdict locally:
+
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli install-dictionary `
+  --data-dir data `
+  --provider jmdict
+```
+
+This writes:
+- `data/dictionaries/offline.json`
+
 ## Command Guide
 
 ### 1) `scan`
@@ -128,6 +148,7 @@ Useful options:
 - `--no-preprocess`: disable image preprocessing
 - `--ocr-mode sidecar`: dev mode; reads `image.txt` next to `image.png`
 - `--ocr-mode manga-ocr`: alternative OCR engine tuned for manga-style Japanese text
+- `--online-dict jisho`: optional online fallback for compound candidate detection during scan
 
 ### 2) `review`
 
@@ -145,6 +166,14 @@ What it does:
 - removes particles and known words
 - removes words already seen in same source
 - stores approved words for build stage
+- prints skipped words by reason in CLI output:
+  - known words
+  - particles
+  - already-seen words
+  - manually excluded words
+
+Candidate behavior note:
+- scan now tries adjacent-token compound merges (keeps both split tokens and merged token when the merged form exists in dictionary data).
 
 ### 3) `build`
 
@@ -159,8 +188,16 @@ What it does:
 ```
 
 Output:
-- `data/runs/<run_id>/deck.apkg`
-- `data/runs/<run_id>/build.json`
+- `data/<source>/<run_id>/deck.apkg`
+- `data/<source>/<run_id>/build.json`
+- CLI prints any skipped words that had no meanings.
+
+Important build rule:
+- words with no English meanings are skipped (no blank-back cards)
+- if all approved words are missing meanings, `build` exits with a friendly summary:
+  - `No cards were created for this run.`
+  - `Missing meaning (N): ...`
+  - next steps to use `--online-dict jisho` or add entries to `data/dictionaries/offline.json`
 
 ### 4) `run` (all stages)
 
@@ -178,9 +215,9 @@ Output:
 
 ## Data Files
 
-- Known words list: `data/known_words.txt`
-- Source dedup index: `data/sources/<source_id>/seen_words.json`
-- Run artifacts: `data/runs/<run_id>/`
+- Known words list: `data/<source>/known_words.txt`
+- Source dedup index: `data/<source>/seen_words.json`
+- Run artifacts: `data/<source>/<run_id>/`
 
 ## Troubleshooting
 
@@ -225,6 +262,17 @@ Install Japanese language data (`jpn.traineddata`) into:
 - Try higher-resolution screenshots.
 - Keep text horizontal.
 - Toggle preprocessing with/without `--no-preprocess`.
+
+### manga-ocr startup is noisy or slow
+
+- The CLI now configures manga-ocr/transformers/huggingface logging to reduce non-actionable startup output.
+- First run is usually slower because model files are loaded (or downloaded once if missing). Later runs reuse local cache.
+- To see full raw third-party startup logs for debugging:
+
+```powershell
+$env:JP_ANKI_MANGA_OCR_DEBUG = "1"
+.\.venv\Scripts\python -m jp_anki_builder.cli scan --ocr-mode manga-ocr ...
+```
 
 ### Candidate extraction quality is low
 

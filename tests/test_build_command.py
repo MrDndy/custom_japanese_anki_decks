@@ -13,7 +13,7 @@ def test_build_exports_apkg_from_review_artifact(tmp_path: Path):
     pytest.importorskip("genanki")
 
     data_dir = tmp_path / "data"
-    run_dir = data_dir / "runs" / "run-3"
+    run_dir = data_dir / "manga-a" / "run-3"
     run_dir.mkdir(parents=True)
     (run_dir / "review.json").write_text(
         json.dumps(
@@ -62,7 +62,7 @@ def test_build_exports_apkg_from_review_artifact(tmp_path: Path):
     assert apkg.exists()
 
     payload = json.loads((run_dir / "build.json").read_text(encoding="utf-8"))
-    assert payload["deck_name"] == "manga-a::Volume02::Chapter07"
+    assert payload["deck_name"] == "manga-a::Vol02::Ch07"
     assert payload["note_count"] == 4
 
 
@@ -72,7 +72,7 @@ def test_build_uses_online_fallback_when_offline_missing(tmp_path: Path, monkeyp
     from jp_anki_builder import build as build_module
 
     data_dir = tmp_path / "data"
-    run_dir = data_dir / "runs" / "run-5"
+    run_dir = data_dir / "manga-a" / "run-5"
     run_dir.mkdir(parents=True)
     (run_dir / "review.json").write_text(
         json.dumps(
@@ -117,3 +117,97 @@ def test_build_uses_online_fallback_when_offline_missing(tmp_path: Path, monkeyp
     payload = json.loads((run_dir / "build.json").read_text(encoding="utf-8"))
     assert payload["enriched"][0]["reading"] == "みとうろくご"
     assert payload["enriched"][0]["meanings"] == ["unknown term"]
+
+
+def test_build_skips_words_with_missing_meanings_and_reports_them(tmp_path: Path):
+    pytest.importorskip("genanki")
+
+    data_dir = tmp_path / "data"
+    run_dir = data_dir / "manga-a" / "run-missing"
+    run_dir.mkdir(parents=True)
+    (run_dir / "review.json").write_text(
+        json.dumps(
+            {
+                "source": "manga-a",
+                "run_id": "run-missing",
+                "approved_candidates": ["known_word", "unknown_word"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    dict_dir = data_dir / "dictionaries"
+    dict_dir.mkdir(parents=True)
+    (dict_dir / "offline.json").write_text(
+        json.dumps(
+            {
+                "known_word": {"reading": "known_reading", "meanings": ["known meaning"]},
+                "unknown_word": {"reading": "", "meanings": []},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "build",
+            "--source",
+            "manga-a",
+            "--run-id",
+            "run-missing",
+            "--data-dir",
+            str(data_dir),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "[BUILD]" in result.stdout
+    assert "Missing meaning (1): unknown_word" in result.stdout
+    payload = json.loads((run_dir / "build.json").read_text(encoding="utf-8"))
+    assert payload["approved_word_count"] == 2
+    assert payload["buildable_word_count"] == 1
+    assert payload["missing_meaning_count"] == 1
+    assert payload["missing_meaning_words"] == ["unknown_word"]
+    assert payload["note_count"] == 2
+
+
+def test_build_fails_when_no_words_have_meanings(tmp_path: Path):
+    pytest.importorskip("genanki")
+
+    data_dir = tmp_path / "data"
+    run_dir = data_dir / "manga-a" / "run-empty-meanings"
+    run_dir.mkdir(parents=True)
+    (run_dir / "review.json").write_text(
+        json.dumps(
+            {
+                "source": "manga-a",
+                "run_id": "run-empty-meanings",
+                "approved_candidates": ["unknown_word"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    dict_dir = data_dir / "dictionaries"
+    dict_dir.mkdir(parents=True)
+    (dict_dir / "offline.json").write_text("{}", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "build",
+            "--source",
+            "manga-a",
+            "--run-id",
+            "run-empty-meanings",
+            "--data-dir",
+            str(data_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "[BUILD]" in result.output
+    assert "No cards were created for this run." in result.output
+    assert "Missing meaning (1): unknown_word" in result.output
+    assert "[NEXT] Add meanings to data/dictionaries/offline.json" in result.output

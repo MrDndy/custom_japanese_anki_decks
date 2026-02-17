@@ -1,12 +1,73 @@
 from __future__ import annotations
 
+import os
 import re
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
 
 class OcrError(RuntimeError):
     pass
+
+
+_MANGA_OCR_RUNTIME_CONFIGURED = False
+
+
+def _configure_manga_ocr_runtime() -> None:
+    """Tune third-party logging/warnings for cleaner manga-ocr startup output."""
+    global _MANGA_OCR_RUNTIME_CONFIGURED
+    if _MANGA_OCR_RUNTIME_CONFIGURED:
+        return
+
+    # Prefer official verbosity controls where available.
+    os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+    os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+    # Skip known non-actionable startup warnings from model loading.
+    warnings.filterwarnings(
+        "ignore",
+        message=r".*tie decoder\.bert\.embeddings\.word_embeddings\.weight.*",
+    )
+    warnings.filterwarnings(
+        "ignore",
+        message=r".*tie decoder\.cls\.predictions\.bias.*",
+    )
+
+    if os.environ.get("JP_ANKI_MANGA_OCR_DEBUG") == "1":
+        _MANGA_OCR_RUNTIME_CONFIGURED = True
+        return
+
+    try:
+        from transformers.utils import logging as transformers_logging
+
+        transformers_logging.set_verbosity_error()
+    except Exception:
+        pass
+
+    try:
+        from huggingface_hub.utils import logging as hf_logging
+
+        hf_logging.set_verbosity_error()
+    except Exception:
+        pass
+
+    try:
+        from huggingface_hub.utils import disable_progress_bars
+
+        disable_progress_bars()
+    except Exception:
+        pass
+
+    try:
+        from loguru import logger
+
+        logger.disable("manga_ocr")
+    except Exception:
+        pass
+
+    _MANGA_OCR_RUNTIME_CONFIGURED = True
 
 
 @dataclass
@@ -28,6 +89,7 @@ class MangaOcrProvider:
     def _get_engine(cls):
         if cls._engine is not None:
             return cls._engine
+        _configure_manga_ocr_runtime()
         try:
             from manga_ocr import MangaOcr
         except ImportError as exc:

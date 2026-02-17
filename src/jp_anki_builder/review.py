@@ -4,8 +4,7 @@ import json
 from dataclasses import dataclass
 
 from jp_anki_builder.config import RunPaths
-from jp_anki_builder.dedup import exclude_seen
-from jp_anki_builder.filtering import filter_tokens
+from jp_anki_builder.filtering import DEFAULT_PARTICLES
 
 
 @dataclass
@@ -15,6 +14,10 @@ class ReviewSummary:
     initial_count: int
     approved_count: int
     review_artifact_path: str
+    excluded_known: list[str]
+    excluded_particles: list[str]
+    excluded_seen: list[str]
+    excluded_manual: list[str]
 
 
 @dataclass
@@ -23,6 +26,20 @@ class ReviewPlan:
     run_id: str
     initial_candidates: list[str]
     filtered_candidates: list[str]
+    excluded_known: list[str]
+    excluded_particles: list[str]
+    excluded_seen: list[str]
+
+
+def _ordered_unique(words: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for word in words:
+        if word in seen:
+            continue
+        seen.add(word)
+        unique.append(word)
+    return unique
 
 
 def _load_words_file(path) -> set[str]:
@@ -75,6 +92,9 @@ def run_review(
         "run_id": run_id,
         "initial_candidates": candidates,
         "approved_candidates": approved,
+        "excluded_known": plan.excluded_known,
+        "excluded_particles": plan.excluded_particles,
+        "excluded_seen": plan.excluded_seen,
         "excluded_manual": sorted(excluded_manual),
     }
     paths.review_artifact.write_text(
@@ -95,6 +115,10 @@ def run_review(
         initial_count=len(candidates),
         approved_count=len(approved),
         review_artifact_path=str(paths.review_artifact),
+        excluded_known=plan.excluded_known,
+        excluded_particles=plan.excluded_particles,
+        excluded_seen=plan.excluded_seen,
+        excluded_manual=sorted(excluded_manual),
     )
 
 
@@ -107,12 +131,32 @@ def prepare_review(source: str, run_id: str, base_dir: str = "data") -> ReviewPl
     candidates = scan_payload.get("candidates", [])
     known_words = _load_words_file(paths.known_words)
     seen_words = _load_seen_words(paths.source_seen_words)
-    filtered = filter_tokens(candidates, known_words=known_words)
-    deduped = exclude_seen(filtered, seen_words)
+    local_seen: set[str] = set()
+    excluded_known: list[str] = []
+    excluded_particles: list[str] = []
+    excluded_seen: list[str] = []
+    deduped: list[str] = []
+
+    for token in candidates:
+        if token in DEFAULT_PARTICLES:
+            excluded_particles.append(token)
+            continue
+        if token in known_words:
+            excluded_known.append(token)
+            continue
+        if token in seen_words or token in local_seen:
+            excluded_seen.append(token)
+            continue
+
+        local_seen.add(token)
+        deduped.append(token)
 
     return ReviewPlan(
         source=source,
         run_id=run_id,
         initial_candidates=candidates,
         filtered_candidates=deduped,
+        excluded_known=_ordered_unique(excluded_known),
+        excluded_particles=_ordered_unique(excluded_particles),
+        excluded_seen=_ordered_unique(excluded_seen),
     )

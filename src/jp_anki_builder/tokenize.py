@@ -66,8 +66,7 @@ def _is_candidate_token(token: str) -> bool:
 
 
 def extract_candidates(text: str) -> list[str]:
-    tokenizer = _build_word_tokenizer()
-    raw_tokens = tokenizer(text) if tokenizer else _regex_tokenize(text)
+    raw_tokens = extract_token_sequence(text)
     raw_tokens = _augment_noise_corrected_tokens(raw_tokens)
 
     seen: set[str] = set()
@@ -80,6 +79,11 @@ def extract_candidates(text: str) -> list[str]:
         seen.add(token)
         result.append(token)
     return result
+
+
+def extract_token_sequence(text: str) -> list[str]:
+    tokenizer = _build_word_tokenizer()
+    return tokenizer(text) if tokenizer else _regex_tokenize(text)
 
 
 def _augment_noise_corrected_tokens(tokens: list[str]) -> list[str]:

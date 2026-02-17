@@ -20,6 +20,7 @@ class Pipeline:
         ocr_language: str = "jpn",
         tesseract_cmd: str | None = None,
         preprocess: bool = True,
+        online_dict: str = "off",
     ) -> dict:
         summary = run_scan(
             images=images,
@@ -30,12 +31,14 @@ class Pipeline:
             ocr_language=ocr_language,
             tesseract_cmd=tesseract_cmd,
             preprocess=preprocess,
+            online_dict=online_dict,
         )
         return {
             "stage": "scan",
             "run_id": summary.run_id,
             "image_count": summary.image_count,
             "candidate_count": summary.candidate_count,
+            "candidates": summary.candidates,
             "artifact_path": str(summary.artifact_path),
         }
 
@@ -59,6 +62,10 @@ class Pipeline:
             "source": summary.source,
             "initial_count": summary.initial_count,
             "approved_count": summary.approved_count,
+            "excluded_known": summary.excluded_known,
+            "excluded_particles": summary.excluded_particles,
+            "excluded_seen": summary.excluded_seen,
+            "excluded_manual": summary.excluded_manual,
             "artifact_path": summary.review_artifact_path,
         }
 
@@ -83,6 +90,10 @@ class Pipeline:
             "run_id": summary.run_id,
             "source": summary.source,
             "note_count": summary.note_count,
+            "approved_word_count": summary.approved_word_count,
+            "buildable_word_count": summary.buildable_word_count,
+            "missing_meaning_words": summary.missing_meaning_words,
+            "buildable_words": summary.buildable_words,
             "package_path": summary.package_path,
             "artifact_path": summary.artifact_path,
         }
@@ -110,6 +121,7 @@ class Pipeline:
             ocr_language=ocr_language,
             tesseract_cmd=tesseract_cmd,
             preprocess=preprocess,
+            online_dict=online_dict,
         )
         review_result = self.review(
             source=source,

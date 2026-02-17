@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import typer
 
+from jp_anki_builder.build import NoBuildableWordsError
+from jp_anki_builder.dict_install import DEFAULT_JMDICT_E_URL, install_jmdict_offline_json
 from jp_anki_builder.pipeline import Pipeline
 from jp_anki_builder.review import prepare_review
 
 app = typer.Typer()
+WORD_PREVIEW_LIMIT = 10
 
 
 def _parse_selected_indices(raw: str, max_value: int) -> list[int]:
@@ -27,6 +30,35 @@ def _parse_selected_indices(raw: str, max_value: int) -> list[int]:
     return sorted(set(indices))
 
 
+def _emit_stage_header(stage: str) -> None:
+    typer.echo(f"[{stage}]")
+
+
+def _format_word_preview(words: list[str], limit: int = WORD_PREVIEW_LIMIT) -> str:
+    if not words:
+        return "(none)"
+    shown = words[:limit]
+    remainder = len(words) - len(shown)
+    text = ", ".join(shown)
+    if remainder > 0:
+        text += f", (+{remainder} more)"
+    return text
+
+
+def _emit_reason_bucket(label: str, words: list[str]) -> None:
+    if not words:
+        return
+    typer.echo(f"[WARN] {label} ({len(words)}): {_format_word_preview(words)}")
+
+
+def _emit_empty_build_guidance(missing_meaning_words: list[str]) -> None:
+    _emit_stage_header("BUILD")
+    typer.echo("[WARN] No cards were created for this run.")
+    _emit_reason_bucket("Missing meaning", missing_meaning_words)
+    typer.echo("[NEXT] Add meanings to data/dictionaries/offline.json")
+    typer.echo("[NEXT] Or rerun with --online-dict jisho")
+
+
 @app.command()
 def scan(
     images: str = typer.Option(..., help="Image file or directory path."),
@@ -44,6 +76,7 @@ def scan(
         "--no-preprocess",
         help="Disable basic OCR image preprocessing.",
     ),
+    online_dict: str = typer.Option("off", help="Online fallback dictionary for compound detection: off or jisho."),
 ) -> None:
     """Scan screenshots and produce OCR/candidate artifacts."""
     try:
@@ -55,14 +88,18 @@ def scan(
             ocr_language=ocr_language,
             tesseract_cmd=tesseract_cmd,
             preprocess=not no_preprocess,
+            online_dict=online_dict,
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc), param_hint="--images") from exc
     except RuntimeError as exc:
         raise typer.BadParameter(str(exc), param_hint="--ocr-mode") from exc
 
-    typer.echo(f"scan complete: {result['image_count']} image(s), {result['candidate_count']} candidate(s)")
-    typer.echo(f"artifact: {result['artifact_path']}")
+    _emit_stage_header("SCAN")
+    typer.echo(f"[OK] I processed {result['image_count']} image(s).")
+    typer.echo(f"[OK] I found {result['candidate_count']} candidate word(s).")
+    typer.echo(f"[INFO] Candidate preview: {_format_word_preview(result.get('candidates', []))}")
+    typer.echo(f"[INFO] Saved scan results to: {result['artifact_path']}")
 
 
 @app.command()
@@ -79,7 +116,7 @@ def review(
     save_excluded_to_known: bool = typer.Option(
         False,
         "--save-excluded-to-known",
-        help="Append manually excluded words to known_words.txt.",
+        help="Append manually excluded words to data/<source>/known_words.txt.",
     ),
 ) -> None:
     """Review and approve candidate words."""
@@ -107,7 +144,7 @@ def review(
 
             if manual_excludes and not save_excluded_to_known:
                 save_excluded_to_known = typer.confirm(
-                    "Save excluded words to known_words.txt?",
+                    "Save excluded words to data/<source>/known_words.txt?",
                     default=False,
                 )
 
@@ -117,11 +154,15 @@ def review(
         exclude=sorted(manual_excludes),
         save_excluded_to_known=save_excluded_to_known,
     )
+    _emit_stage_header("REVIEW")
     typer.echo(
-        "review complete: "
-        f"{result['approved_count']}/{result['initial_count']} approved candidate(s)"
+        f"[OK] I approved {result['approved_count']} of {result['initial_count']} candidate(s) for card building."
     )
-    typer.echo(f"artifact: {result['artifact_path']}")
+    _emit_reason_bucket("Known", result.get("excluded_known", []))
+    _emit_reason_bucket("Particle", result.get("excluded_particles", []))
+    _emit_reason_bucket("Already seen", result.get("excluded_seen", []))
+    _emit_reason_bucket("Manual exclude", result.get("excluded_manual", []))
+    typer.echo(f"[INFO] Saved review results to: {result['artifact_path']}")
 
 
 @app.command()
@@ -144,12 +185,22 @@ def build(
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc), param_hint="--run-id") from exc
+    except NoBuildableWordsError as exc:
+        _emit_empty_build_guidance(exc.missing_meaning_words)
+        raise typer.Exit(code=1) from exc
     except RuntimeError as exc:
-        raise typer.BadParameter(str(exc), param_hint="--data-dir") from exc
+        typer.echo(f"Build failed: {exc}")
+        raise typer.Exit(code=1) from exc
 
-    typer.echo(f"build complete: {result['note_count']} note(s)")
-    typer.echo(f"package: {result['package_path']}")
-    typer.echo(f"artifact: {result['artifact_path']}")
+    _emit_stage_header("BUILD")
+    typer.echo(
+        f"[OK] I created cards for {result['buildable_word_count']} word(s): "
+        f"{_format_word_preview(result.get('buildable_words', []))}"
+    )
+    _emit_reason_bucket("Missing meaning", result.get("missing_meaning_words", []))
+    typer.echo("[OK] Deck package created.")
+    typer.echo(f"[INFO] Package: {result['package_path']}")
+    typer.echo(f"[INFO] Build details: {result['artifact_path']}")
 
 
 @app.command()
@@ -173,15 +224,16 @@ def run(
     save_excluded_to_known: bool = typer.Option(
         False,
         "--save-excluded-to-known",
-        help="Append manually excluded words to known_words.txt.",
+        help="Append manually excluded words to data/<source>/known_words.txt.",
     ),
     volume: str | None = typer.Option(None, help="Optional volume label, e.g. 02."),
     chapter: str | None = typer.Option(None, help="Optional chapter label, e.g. 07."),
     online_dict: str = typer.Option("off", help="Online fallback dictionary: off or jisho."),
 ) -> None:
     """Run scan -> review -> build."""
+    pipeline = Pipeline(data_dir=data_dir)
     try:
-        result = Pipeline(data_dir=data_dir).run_all(
+        scan_result = pipeline.scan(
             images=images,
             source=source,
             run_id=run_id,
@@ -189,22 +241,99 @@ def run(
             ocr_language=ocr_language,
             tesseract_cmd=tesseract_cmd,
             preprocess=not no_preprocess,
+            online_dict=online_dict,
+        )
+        _emit_stage_header("SCAN")
+        typer.echo(
+            f"[OK] I processed {scan_result['image_count']} image(s)."
+        )
+        typer.echo(f"[OK] I found {scan_result['candidate_count']} candidate word(s).")
+        typer.echo(f"[INFO] Candidate preview: {_format_word_preview(scan_result.get('candidates', []))}")
+        if scan_result["candidate_count"] == 0:
+            typer.echo("[WARN] No candidates detected in scan stage.")
+            raise typer.Exit(code=1)
+
+        review_result = pipeline.review(
+            source=source,
+            run_id=run_id,
             exclude=exclude,
             save_excluded_to_known=save_excluded_to_known,
+        )
+        _emit_stage_header("REVIEW")
+        typer.echo(
+            f"[OK] I approved {review_result['approved_count']} of {review_result['initial_count']} candidate(s) for card building."
+        )
+        _emit_reason_bucket("Known", review_result.get("excluded_known", []))
+        _emit_reason_bucket("Particle", review_result.get("excluded_particles", []))
+        _emit_reason_bucket("Already seen", review_result.get("excluded_seen", []))
+        _emit_reason_bucket("Manual exclude", review_result.get("excluded_manual", []))
+        if review_result["approved_count"] == 0:
+            typer.echo("[WARN] No approved words remain after review.")
+            raise typer.Exit(code=1)
+
+        build_result = pipeline.build(
+            source=source,
+            run_id=run_id,
             volume=volume,
             chapter=chapter,
             online_dict=online_dict,
         )
-    except (ValueError, RuntimeError) as exc:
+    except NoBuildableWordsError as exc:
+        _emit_empty_build_guidance(exc.missing_meaning_words)
+        raise typer.Exit(code=1) from exc
+    except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
+    except RuntimeError as exc:
+        typer.echo(f"Run failed: {exc}")
+        raise typer.Exit(code=1) from exc
 
+    _emit_stage_header("BUILD")
     typer.echo(
-        "run complete: "
-        f"{result['scan']['image_count']} image(s), "
-        f"{result['review']['approved_count']} approved candidate(s), "
-        f"{result['build']['note_count']} note(s)"
+        f"[OK] I created cards for {build_result['buildable_word_count']} word(s): "
+        f"{_format_word_preview(build_result.get('buildable_words', []))}"
     )
-    typer.echo(f"package: {result['build']['package_path']}")
+    _emit_reason_bucket("Missing meaning", build_result.get("missing_meaning_words", []))
+    typer.echo("[OK] Deck package created.")
+    typer.echo(f"[INFO] Package: {build_result['package_path']}")
+
+    _emit_stage_header("RUN")
+    typer.echo("[OK] Pipeline finished: scan -> review -> build")
+    typer.echo(
+        f"[INFO] Totals: {scan_result['candidate_count']} candidates, "
+        f"{review_result['approved_count']} approved, "
+        f"{build_result['note_count']} notes created"
+    )
+
+
+@app.command("install-dictionary")
+def install_dictionary(
+    data_dir: str = typer.Option("data", help="Data storage directory."),
+    provider: str = typer.Option("jmdict", help="Dictionary provider to install."),
+    source_url: str = typer.Option(
+        DEFAULT_JMDICT_E_URL,
+        help="Source URL for the dictionary download.",
+    ),
+    max_meanings: int = typer.Option(3, help="Max meanings stored per entry."),
+) -> None:
+    """Install a local offline dictionary into data/dictionaries/offline.json."""
+    if provider != "jmdict":
+        raise typer.BadParameter("Unsupported provider. Use: jmdict")
+
+    _emit_stage_header("DICTIONARY")
+    typer.echo("[INFO] Installing JMdict offline dictionary. This can take a few minutes.")
+    try:
+        summary = install_jmdict_offline_json(
+            base_dir=data_dir,
+            source_url=source_url,
+            max_meanings=max_meanings,
+        )
+    except Exception as exc:
+        typer.echo(f"[WARN] Dictionary install failed: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"[OK] Installed provider: {summary.provider}")
+    typer.echo(f"[OK] Entries written: {summary.entry_count}")
+    typer.echo(f"[INFO] Output: {summary.output_path}")
 
 
 if __name__ == "__main__":

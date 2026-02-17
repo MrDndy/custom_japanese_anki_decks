@@ -11,7 +11,7 @@ from pathlib import Path
 class OfflineJsonDictionary:
     path: Path
 
-    def lookup(self, word: str):
+    def lookup(self, word: str, exact_match: bool = False):
         if not self.path.exists():
             return None
         payload = json.loads(self.path.read_text(encoding="utf-8-sig"))
@@ -20,7 +20,7 @@ class OfflineJsonDictionary:
 
 @dataclass
 class NullOnlineDictionary:
-    def lookup(self, word: str):
+    def lookup(self, word: str, exact_match: bool = False):
         return None
 
 
@@ -28,7 +28,7 @@ class NullOnlineDictionary:
 class JishoOnlineDictionary:
     timeout_seconds: int = 8
 
-    def lookup(self, word: str):
+    def lookup(self, word: str, exact_match: bool = False):
         url = f"https://jisho.org/api/v1/search/words?keyword={quote(word)}"
         req = Request(url, headers={"User-Agent": "jp-anki-builder/0.1"})
         try:
@@ -42,6 +42,17 @@ class JishoOnlineDictionary:
             return None
 
         first = data[0]
+        if exact_match:
+            first = None
+            for item in data:
+                for jp in item.get("japanese", []):
+                    if jp.get("word") == word:
+                        first = item
+                        break
+                if first is not None:
+                    break
+            if first is None:
+                return None
         japanese = first.get("japanese", [])
         reading = ""
         if japanese:
