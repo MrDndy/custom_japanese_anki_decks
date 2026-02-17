@@ -1,52 +1,138 @@
-﻿# Usage Guide
+# Usage Guide
 
-## Commands
+## Current Commands
 
-- `scan` prepares OCR output and token candidates from screenshot inputs.
-- `review` removes particles, known words, and source-seen duplicates, then supports interactive approval.
-- `build` enriches approved words (offline first, online fallback) and maps two card directions.
-- `run` executes `scan -> review -> build`.
+- `scan`: reads screenshots, runs OCR, extracts candidate tokens, writes `scan.json`.
+- `review`: filters candidates (particles, known words, source dedup), writes `review.json`.
+- `build`: enriches approved words and exports Anki deck package (`deck.apkg`).
+- `run`: executes `scan -> review -> build` in one command.
 
-## Known Words
+## OCR Modes
 
-Use `data/known_words.txt` to store words that should be auto-excluded on future runs.
+- `tesseract` (default): real OCR from screenshots.
+- `manga-ocr`: model tuned for manga-style Japanese OCR (recommended for manga/game UI text).
+- `sidecar`: reads text from `*.txt` files next to images (testing/dev mode).
 
-Optional review behavior can append removals to this file (`save-to-known-list`).
+Notes for `manga-ocr`:
 
-## Source-Level Dedup
+- Startup logs from third-party libraries are reduced by default.
+- First load may still be slower due to model initialization and local cache checks.
+- Set `JP_ANKI_MANGA_OCR_DEBUG=1` to re-enable raw startup logs when troubleshooting.
 
-Each source keeps a seen-word index at:
+Compound merge note:
 
-- `data/sources/<source_id>/seen_words.json`
+- During `scan`, adjacent tokens are checked for merged compounds.
+- If a merged form exists in dictionary data, scan keeps both:
+  - original split tokens
+  - merged compound token
+- Validation is offline dictionary first, with optional online fallback when `--online-dict jisho` is enabled.
 
-Words approved in one chapter are skipped in later chapters for the same source.
+## Tokenization
 
-## Deck Naming
+- Preferred path: install `fugashi` + `unidic-lite` (`.[japanese_nlp]`) for word-level extraction.
+- Fallback path: regex chunk extraction when tokenizer deps are unavailable.
 
-Deck naming follows:
+## Example End-to-End
 
-- `Source::VolumeXX::ChapterYY`
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli run `
+  --images C:\path\to\screenshots `
+  --source my-source `
+  --run-id my-run-001 `
+  --data-dir data `
+  --ocr-mode tesseract `
+  --volume 01 `
+  --chapter 01
+```
 
-If volume or chapter is missing, omitted levels are not included.
+`run` is stage-gated. It exits early with actionable feedback when:
+- scan finds zero candidates
+- review leaves zero approved words
+- build finds zero words with meanings
+
+## Review Behavior
+
+`review` applies these filters in order:
+
+1. Known words from `data/<source>/known_words.txt`
+2. Built-in particles/function words
+3. Words already seen in `data/<source>/seen_words.json`
+4. Manual excludes (`--exclude ...`)
+
+If `--save-excluded-to-known` is set, manual excludes are appended to `data/<source>/known_words.txt`.
+
+CLI output now includes skipped-word reporting by reason:
+
+- known words
+- particles
+- already-seen words
+- manually excluded words
+
+Interactive mode:
+
+- Use `review --interactive` to see filtered candidates and exclude by index.
+- You can confirm saving excluded words to known words during the prompt flow.
 
 ## Artifacts
 
-Run artifacts are intended to live under:
+Run output directory:
 
-- `data/runs/<run_id>/`
+- `data/<source>/<run_id>/scan.json`
+- `data/<source>/<run_id>/review.json`
+- `data/<source>/<run_id>/build.json`
+- `data/<source>/<run_id>/deck.apkg`
 
-These artifacts support resume/review without repeating OCR.
+## Offline Dictionary
 
-## Testing
+Current build step reads:
 
-Run all tests:
+- `data/dictionaries/offline.json`
 
-```bash
-.\.venv\Scripts\python -m pytest -q
+To install a local dictionary file:
+
+```powershell
+.\.venv\Scripts\python -m jp_anki_builder.cli install-dictionary `
+  --data-dir data `
+  --provider jmdict
 ```
 
-Run CLI help:
+Optional online fallback:
 
-```bash
+- `--online-dict off` (default)
+- `--online-dict jisho` (queries Jisho API for missing words)
+
+Example shape:
+
+```json
+{
+  "word": {
+    "reading": "reading",
+    "meanings": ["meaning1", "meaning2"]
+  }
+}
+```
+
+## Build Behavior (Meaning Gate)
+
+- `build` only creates cards for words that have at least one English meaning.
+- Words with missing meanings are skipped and printed in CLI output.
+- `build.json` records:
+  - `approved_word_count`
+  - `buildable_word_count`
+  - `missing_meaning_count`
+  - `missing_meaning_words`
+- If zero buildable words remain, the command fails with a remediation message:
+  - `No cards were created for this run.`
+  - `Missing meaning (N): ...`
+  - `Use --online-dict jisho or populate data/dictionaries/offline.json`
+
+## Verification
+
+```powershell
+.\.venv\Scripts\python -m pytest -q
 .\.venv\Scripts\python -m jp_anki_builder.cli --help
 ```
+
+## Enhancement Notes
+
+- Planned for a later version: optional long-lived OCR session mode for faster repeated manga-ocr runs (especially useful for a future GUI).

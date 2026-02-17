@@ -1,0 +1,131 @@
+{
+  "source": "Miharu",
+  "run_id": "Prologue",
+  "ocr_mode": "manga-ocr",
+  "ocr_language": "jpn",
+  "online_dict": "off",
+  "image_count": 6,
+  "records": [
+    {
+      "image": "C:\\Users\\guilt\\OneDrive\\Pictures\\Screenshots\\JPN Screenshots\\Miharu\\Screenshot 2026-02-16 010504.png",
+      "text": "足が痛い",
+      "alternate_texts": [],
+      "candidates": [
+        "足",
+        "痛い"
+      ]
+    },
+    {
+      "image": "C:\\Users\\guilt\\OneDrive\\Pictures\\Screenshots\\JPN Screenshots\\Miharu\\Screenshot 2026-02-16 163753.png",
+      "text": "結局、無駄飯食いかよ．．．",
+      "alternate_texts": [],
+      "candidates": [
+        "結局",
+        "無駄飯",
+        "食い",
+        "無駄飯食い"
+      ]
+    },
+    {
+      "image": "C:\\Users\\guilt\\OneDrive\\Pictures\\Screenshots\\JPN Screenshots\\Miharu\\Screenshot 2026-02-16 171932.png",
+      "text": "Ｆ地区の盗賊連中、俺達が仕留めた鹿の肉焼いてやがったし。",
+      "alternate_texts": [],
+      "candidates": [
+        "地区",
+        "盗賊",
+        "連中",
+        "俺",
+        "達",
+        "仕留め",
+        "鹿",
+        "肉",
+        "焼い",
+        "やがっ",
+        "俺達"
+      ]
+    },
+    {
+      "image": "C:\\Users\\guilt\\OneDrive\\Pictures\\Screenshots\\JPN Screenshots\\Miharu\\Screenshot 2026-02-16 182908.png",
+      "text": "傭兵が２０人いても装甲車一台でこの有り様か．．．",
+      "alternate_texts": [],
+      "candidates": [
+        "傭兵",
+        "人",
+        "装甲",
+        "車",
+        "一",
+        "台",
+        "この",
+        "有り様",
+        "装甲車",
+        "一台"
+      ]
+    },
+    {
+      "image": "C:\\Users\\guilt\\OneDrive\\Pictures\\Screenshots\\JPN Screenshots\\Miharu\\Screenshot 2026-02-16 182925.png",
+      "text": "ウチらの村の傭兵、弱かったな〜イザという時役立たずか。",
+      "alternate_texts": [],
+      "candidates": [
+        "ウチ",
+        "村",
+        "傭兵",
+        "弱かっ",
+        "な〜",
+        "イザ",
+        "いう",
+        "時",
+        "役立た"
+      ]
+    },
+    {
+      "image": "C:\\Users\\guilt\\OneDrive\\Pictures\\Screenshots\\JPN Screenshots\\Miharu\\Screenshot 2026-02-16 182946.png",
+      "text": "良い匂いしてたなぁ〜",
+      "alternate_texts": [],
+      "candidates": [
+        "良い",
+        "匂い",
+        "なぁ"
+      ]
+    }
+  ],
+  "candidates": [
+    "足",
+    "痛い",
+    "結局",
+    "無駄飯",
+    "食い",
+    "無駄飯食い",
+    "地区",
+    "盗賊",
+    "連中",
+    "俺",
+    "達",
+    "仕留め",
+    "鹿",
+    "肉",
+    "焼い",
+    "やがっ",
+    "俺達",
+    "傭兵",
+    "人",
+    "装甲",
+    "車",
+    "一",
+    "台",
+    "この",
+    "有り様",
+    "装甲車",
+    "一台",
+    "ウチ",
+    "村",
+    "弱かっ",
+    "な〜",
+    "イザ",
+    "いう",
+    "時",
+    "役立た",
+    "良い",
+    "匂い",
+    "なぁ"
+  ]
+}

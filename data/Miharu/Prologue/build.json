@@ -1,0 +1,286 @@
+{
+  "source": "Miharu",
+  "run_id": "Prologue",
+  "deck_name": "Miharu::Vol01::Ch00",
+  "approved_word_count": 35,
+  "buildable_word_count": 25,
+  "missing_meaning_count": 10,
+  "missing_meaning_words": [
+    "仕留め",
+    "焼い",
+    "やがっ",
+    "この",
+    "ウチ",
+    "弱かっ",
+    "な〜",
+    "イザ",
+    "いう",
+    "役立た"
+  ],
+  "note_count": 50,
+  "package_path": "data\\Miharu\\Prologue\\deck.apkg",
+  "online_dict": "off",
+  "enriched": [
+    {
+      "word": "足",
+      "reading": "あし",
+      "meanings": [
+        "foot",
+        "paw",
+        "arm (of an octopus, squid, etc.)"
+      ]
+    },
+    {
+      "word": "痛い",
+      "reading": "いたい",
+      "meanings": [
+        "painful",
+        "sore",
+        "cringy"
+      ]
+    },
+    {
+      "word": "結局",
+      "reading": "けっきょく",
+      "meanings": [
+        "after all",
+        "in the end",
+        "ultimately"
+      ]
+    },
+    {
+      "word": "無駄飯",
+      "reading": "むだめし",
+      "meanings": [
+        "living idly"
+      ]
+    },
+    {
+      "word": "食い",
+      "reading": "くい",
+      "meanings": [
+        "eating",
+        "bite (in fishing)"
+      ]
+    },
+    {
+      "word": "無駄飯食い",
+      "reading": "むだめしぐい",
+      "meanings": [
+        "ne'er-do-well",
+        "waster",
+        "idler"
+      ]
+    },
+    {
+      "word": "地区",
+      "reading": "ちく",
+      "meanings": [
+        "district",
+        "area",
+        "zone"
+      ]
+    },
+    {
+      "word": "盗賊",
+      "reading": "とうぞく",
+      "meanings": [
+        "thief",
+        "robber",
+        "burglar"
+      ]
+    },
+    {
+      "word": "連中",
+      "reading": "れんちゅう",
+      "meanings": [
+        "company",
+        "lot",
+        "people"
+      ]
+    },
+    {
+      "word": "俺",
+      "reading": "おれ",
+      "meanings": [
+        "I",
+        "me"
+      ]
+    },
+    {
+      "word": "達",
+      "reading": "たち",
+      "meanings": [
+        "pluralizing suffix (esp. for people and animals; formerly honorific)"
+      ]
+    },
+    {
+      "word": "仕留め",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "鹿",
+      "reading": "しか",
+      "meanings": [
+        "deer (esp. the sika deer, Cervus nippon)",
+        "cervid"
+      ]
+    },
+    {
+      "word": "肉",
+      "reading": "にく",
+      "meanings": [
+        "flesh",
+        "meat",
+        "flesh (of a fruit)"
+      ]
+    },
+    {
+      "word": "焼い",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "やがっ",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "俺達",
+      "reading": "おれたち",
+      "meanings": [
+        "we",
+        "us"
+      ]
+    },
+    {
+      "word": "傭兵",
+      "reading": "ようへい",
+      "meanings": [
+        "mercenary (soldier)"
+      ]
+    },
+    {
+      "word": "装甲",
+      "reading": "そうこう",
+      "meanings": [
+        "armoring",
+        "armouring",
+        "armor"
+      ]
+    },
+    {
+      "word": "車",
+      "reading": "くるま",
+      "meanings": [
+        "car",
+        "automobile",
+        "vehicle"
+      ]
+    },
+    {
+      "word": "台",
+      "reading": "だい",
+      "meanings": [
+        "stand",
+        "rest",
+        "base"
+      ]
+    },
+    {
+      "word": "この",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "有り様",
+      "reading": "ありさま",
+      "meanings": [
+        "state",
+        "condition",
+        "circumstances"
+      ]
+    },
+    {
+      "word": "装甲車",
+      "reading": "そうこうしゃ",
+      "meanings": [
+        "armoured vehicle",
+        "armored vehicle"
+      ]
+    },
+    {
+      "word": "一台",
+      "reading": "いちだい",
+      "meanings": [
+        "one machine",
+        "one vehicle"
+      ]
+    },
+    {
+      "word": "ウチ",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "村",
+      "reading": "むら",
+      "meanings": [
+        "village"
+      ]
+    },
+    {
+      "word": "弱かっ",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "な〜",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "イザ",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "いう",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "時",
+      "reading": "とき",
+      "meanings": [
+        "time",
+        "hour",
+        "moment"
+      ]
+    },
+    {
+      "word": "役立た",
+      "reading": "",
+      "meanings": []
+    },
+    {
+      "word": "良い",
+      "reading": "よい",
+      "meanings": [
+        "good",
+        "excellent",
+        "fine"
+      ]
+    },
+    {
+      "word": "匂い",
+      "reading": "におい",
+      "meanings": [
+        "smell",
+        "scent",
+        "odour"
+      ]
+    }
+  ]
+}
