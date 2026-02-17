@@ -63,6 +63,25 @@ It stops early with clear messages if:
 - review leaves no approved words
 - build has no words with meanings
 
+### What "approved words" means
+
+Approved words are the candidates that survive review and are allowed to move to build.
+
+A word is usually excluded before build if it is:
+- in `data/<source>/known_words.txt`
+- a filtered particle/stop token
+- already present in `data/<source>/seen_words.json`
+- manually excluded with `--exclude`
+
+Known words idea:
+- `known_words.txt` is your per-source "already know this" list.
+- Put words here to reduce review noise and avoid generating cards for vocabulary you do not want to study.
+- You can also add words during review with `--save-excluded-to-known`.
+
+Even approved words can still be skipped in build if no meaning is found in:
+- `data/dictionaries/offline.json` (default), and
+- `jisho` (only when `--online-dict jisho` is enabled)
+
 ## Folder structure
 
 - Source data: `data/<source>/`
