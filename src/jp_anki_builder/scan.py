@@ -7,7 +7,7 @@ from pathlib import Path
 from jp_anki_builder.config import RunPaths
 from jp_anki_builder.dictionary import JishoOnlineDictionary, NullOnlineDictionary, OfflineJsonDictionary
 from jp_anki_builder.ocr import build_ocr_provider
-from jp_anki_builder.tokenize import extract_candidates, extract_token_sequence
+from jp_anki_builder.tokenize import extract_candidates, extract_token_sequence, is_candidate_token
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
@@ -92,7 +92,8 @@ def run_scan(
             sequence = extract_token_sequence(candidate_text)
             base = extract_candidates(candidate_text)
             candidates.extend(base)
-            candidates.extend(_merge_compound_candidates(sequence, set(base), word_exists))
+            surface_candidates = {token for token in sequence if is_candidate_token(token)}
+            candidates.extend(_merge_compound_candidates(sequence, surface_candidates, word_exists))
         candidates = list(dict.fromkeys(candidates))
         all_candidates.extend(candidates)
         records.append(
@@ -135,7 +136,9 @@ def _merge_compound_candidates(token_sequence: list[str], candidate_set: set[str
     for i in range(len(token_sequence) - 1):
         left = token_sequence[i]
         right = token_sequence[i + 1]
-        if left not in candidate_set or right not in candidate_set:
+        if left not in candidate_set:
+            continue
+        if right not in candidate_set and right not in {"ず", "ぬ"}:
             continue
         compound = left + right
         if exists_fn(compound):

@@ -9,6 +9,28 @@ def test_filter_tokens_excludes_particles_and_known_words():
 
 
 def test_filter_tokens_excludes_naa_and_kanji_one_to_ten():
-    tokens = ["なぁ", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "人", "冒険"]
+    tokens = [
+        "なぁ",
+        "一",
+        "二",
+        "三",
+        "四",
+        "五",
+        "六",
+        "七",
+        "八",
+        "九",
+        "十",
+        "人",
+        "する",
+        "為る",
+        "いる",
+        "居る",
+        "てる",
+        "この",
+        "その",
+        "あの",
+        "冒険",
+    ]
     result = filter_tokens(tokens, known_words=set())
     assert result == ["冒険"]

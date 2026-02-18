@@ -271,3 +271,45 @@ def test_scan_does_not_merge_across_particle_boundary(tmp_path: Path, monkeypatc
     assert "足" in payload["candidates"]
     assert "痛い" in payload["candidates"]
     assert "足痛い" not in payload["candidates"]
+
+
+def test_scan_merges_lexicalized_negative_compound_when_dictionary_has_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from jp_anki_builder import scan as scan_module
+
+    images_dir = tmp_path / "images"
+    images_dir.mkdir()
+    image = images_dir / "panel1.png"
+    image.write_bytes(b"fake")
+    image.with_suffix(".txt").write_text("ignored", encoding="utf-8")
+
+    data_dir = tmp_path / "data"
+    dict_dir = data_dir / "dictionaries"
+    dict_dir.mkdir(parents=True)
+    (dict_dir / "offline.json").write_text(
+        json.dumps({"役立たず": {"reading": "やくだたず", "meanings": ["good-for-nothing"]}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(scan_module, "extract_token_sequence", lambda text: ["役立た", "ず"])
+    monkeypatch.setattr(scan_module, "extract_candidates", lambda text: ["役立た"])
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "scan",
+            "--images",
+            str(images_dir),
+            "--source",
+            "miharu",
+            "--run-id",
+            "ch03",
+            "--data-dir",
+            str(data_dir),
+            "--ocr-mode",
+            "sidecar",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads((data_dir / "miharu" / "ch03" / "scan.json").read_text(encoding="utf-8"))
+    assert "役立たず" in payload["candidates"]

@@ -20,6 +20,9 @@ python -m venv .venv
 .\.venv\Scripts\python -m pip install -e ".[manga_ocr,japanese_nlp]"
 ```
 
+Why tokenizer extras matter:
+- they enable dictionary-form normalization (lemmatization), so conjugated forms like `弱かった` and `焼いて` can be normalized to `弱い` and `焼く` before dictionary lookup.
+
 ### 3) Install offline dictionary (for local meanings)
 
 ```powershell

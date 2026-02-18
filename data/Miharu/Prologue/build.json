@@ -2,22 +2,16 @@
   "source": "Miharu",
   "run_id": "Prologue",
   "deck_name": "Miharu::Vol01::Ch00",
-  "approved_word_count": 35,
-  "buildable_word_count": 25,
-  "missing_meaning_count": 10,
+  "approved_word_count": 34,
+  "buildable_word_count": 30,
+  "missing_meaning_count": 4,
   "missing_meaning_words": [
-    "仕留め",
-    "焼い",
-    "やがっ",
-    "この",
     "ウチ",
-    "弱かっ",
     "な〜",
     "イザ",
-    "いう",
-    "役立た"
+    "いう"
   ],
-  "note_count": 50,
+  "note_count": 60,
   "package_path": "data\\Miharu\\Prologue\\deck.apkg",
   "online_dict": "off",
   "enriched": [
@@ -115,9 +109,13 @@
       ]
     },
     {
-      "word": "仕留め",
-      "reading": "",
-      "meanings": []
+      "word": "仕留める",
+      "reading": "しとめる",
+      "meanings": [
+        "to bring down (an animal, opponent, etc.)",
+        "to kill",
+        "to shoot dead"
+      ]
     },
     {
       "word": "鹿",
@@ -137,14 +135,20 @@
       ]
     },
     {
-      "word": "焼い",
-      "reading": "",
-      "meanings": []
+      "word": "焼く",
+      "reading": "やく",
+      "meanings": [
+        "to burn",
+        "to roast",
+        "to broil"
+      ]
     },
     {
-      "word": "やがっ",
-      "reading": "",
-      "meanings": []
+      "word": "やがる",
+      "reading": "やがる",
+      "meanings": [
+        "to have the nerve to"
+      ]
     },
     {
       "word": "俺達",
@@ -189,11 +193,6 @@
       ]
     },
     {
-      "word": "この",
-      "reading": "",
-      "meanings": []
-    },
-    {
       "word": "有り様",
       "reading": "ありさま",
       "meanings": [
@@ -231,9 +230,13 @@
       ]
     },
     {
-      "word": "弱かっ",
-      "reading": "",
-      "meanings": []
+      "word": "弱い",
+      "reading": "よわい",
+      "meanings": [
+        "weak",
+        "frail",
+        "delicate"
+      ]
     },
     {
       "word": "な〜",
@@ -260,9 +263,12 @@
       ]
     },
     {
-      "word": "役立た",
-      "reading": "",
-      "meanings": []
+      "word": "役立たず",
+      "reading": "やくたたず",
+      "meanings": [
+        "useless",
+        "deadhead"
+      ]
     },
     {
       "word": "良い",
