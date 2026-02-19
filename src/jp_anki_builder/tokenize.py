@@ -9,6 +9,9 @@ HAS_JAPANESE_RE = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]")
 HAS_KANJI_KATA_RE = re.compile(r"[\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff]")
 IS_HIRAGANA_RE = re.compile(r"^[\u3040-\u309f]+$")
 PARTICLES = {"は", "が", "を", "に", "で", "と", "も", "の", "へ", "か"}
+POS_VERB = "\u52d5\u8a5e"
+POS_AUXILIARY = "\u52a9\u52d5\u8a5e"
+FORM_MIZEN = "\u672a\u7136\u5f62"
 
 
 def _build_word_tokenizer() -> Callable[[str], list[str]] | None:
@@ -34,6 +37,14 @@ def _build_word_tokenizer() -> Callable[[str], list[str]] | None:
                     tokens.append(surface + nxt.surface)
                     i += 2
                     continue
+                if _is_mizen_aux_start(word, nxt):
+                    lemma = _lemma_form(word)
+                    if lemma:
+                        tokens.append(lemma)
+                        i += 2
+                        while i < len(words) and _pos1(words[i]) == POS_AUXILIARY:
+                            i += 1
+                        continue
             lemma = _word_dictionary_form(word)
             tokens.append(lemma or surface)
             i += 1
@@ -68,6 +79,36 @@ def _word_dictionary_form(word) -> str | None:
 
 def _feature_value(feature, attr: str):
     return getattr(feature, attr, None)
+
+
+def _pos1(word) -> str | None:
+    feature = getattr(word, "feature", None)
+    if feature is None:
+        return None
+    return _feature_value(feature, "pos1")
+
+
+def _lemma_form(word) -> str | None:
+    feature = getattr(word, "feature", None)
+    if feature is None:
+        return None
+    for attr in ("lemma", "dictionary_form", "base_form", "lemma_form"):
+        value = _feature_value(feature, attr)
+        if isinstance(value, str) and value and value != "*":
+            return value
+    return None
+
+
+def _is_mizen_aux_start(word, next_word) -> bool:
+    feature = getattr(word, "feature", None)
+    if feature is None:
+        return False
+    return (
+        _feature_value(feature, "pos1") == POS_VERB
+        and _feature_value(feature, "cForm") is not None
+        and str(_feature_value(feature, "cForm")).startswith(FORM_MIZEN)
+        and _pos1(next_word) == POS_AUXILIARY
+    )
 
 
 def _is_negative_aux_pair(word, next_word) -> bool:

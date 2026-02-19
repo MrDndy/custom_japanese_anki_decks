@@ -93,3 +93,12 @@ def test_is_negative_aux_pair_detects_verb_plus_zu():
     left = _Word("役立た", _Feature(pos1="動詞", cForm="未然形-一般"))
     right = _Word("ず", _Feature(pos1="助動詞"))
     assert tokenize._is_negative_aux_pair(left, right) is True
+
+def test_extract_candidates_normalizes_mizen_plus_aux_chain_to_dictionary_form():
+    assert tokenize.extract_candidates("\u596a\u308f\u308c\u308b") == ["\u596a\u3046"]
+
+
+def test_extract_candidate_sequence_keeps_negative_lexicalized_compound():
+    assert "\u5f79\u7acb\u305f\u305a" in tokenize.extract_candidate_token_sequence(
+        "\u5f79\u7acb\u305f\u305a\u304b\u3002"
+    )
