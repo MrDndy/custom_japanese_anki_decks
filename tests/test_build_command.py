@@ -211,3 +211,37 @@ def test_build_fails_when_no_words_have_meanings(tmp_path: Path):
     assert "No cards were created for this run." in result.output
     assert "Missing meaning (1): unknown_word" in result.output
     assert "[NEXT] Add meanings to data/dictionaries/offline.json" in result.output
+
+def test_build_rejects_invalid_online_dict_value(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    run_dir = data_dir / "manga-a" / "run-bad-online"
+    run_dir.mkdir(parents=True)
+    (run_dir / "review.json").write_text(
+        json.dumps(
+            {
+                "source": "manga-a",
+                "run_id": "run-bad-online",
+                "approved_candidates": ["\u5192\u967a"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "build",
+            "--source",
+            "manga-a",
+            "--run-id",
+            "run-bad-online",
+            "--data-dir",
+            str(data_dir),
+            "--online-dict",
+            "invalid",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "unsupported online dictionary mode" in result.output

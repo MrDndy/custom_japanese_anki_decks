@@ -141,3 +141,46 @@ def test_run_stops_after_review_when_no_approved_words(tmp_path: Path):
     assert "[WARN] No approved words remain after review." in result.output
     assert "[WARN] Already seen (1): 冒険" in result.output
     assert not (data_dir / "manga-a" / "run-seen-only" / "deck.apkg").exists()
+
+def test_run_builds_from_normalized_conjugated_input(tmp_path: Path):
+    pytest.importorskip("genanki")
+
+    images_dir = tmp_path / "images"
+    images_dir.mkdir()
+    (images_dir / "shot1.png").write_bytes(b"x")
+    (images_dir / "shot1.txt").write_text("\u6b69\u304b\u3055\u308c\u308b", encoding="utf-8")
+
+    data_dir = tmp_path / "data"
+    dict_dir = data_dir / "dictionaries"
+    dict_dir.mkdir(parents=True)
+    (dict_dir / "offline.json").write_text(
+        json.dumps(
+            {
+                "\u6b69\u304f": {"reading": "\u3042\u308b\u304f", "meanings": ["to walk"]},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--images",
+            str(images_dir),
+            "--source",
+            "manga-a",
+            "--run-id",
+            "run-normalized",
+            "--data-dir",
+            str(data_dir),
+            "--ocr-mode",
+            "sidecar",
+        ],
+    )
+
+    assert result.exit_code == 0
+    build_payload = json.loads((data_dir / "manga-a" / "run-normalized" / "build.json").read_text(encoding="utf-8"))
+    words = [item["word"] for item in build_payload["enriched"]]
+    assert "\u6b69\u304f" in words

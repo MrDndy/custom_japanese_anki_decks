@@ -335,3 +335,109 @@ def test_scan_merges_lexicalized_negative_compound_when_dictionary_has_it(tmp_pa
     assert result.exit_code == 0
     payload = json.loads((data_dir / "miharu" / "ch03" / "scan.json").read_text(encoding="utf-8"))
     assert "役立たず" in payload["candidates"]
+
+def test_scan_artifact_includes_normalized_entry_schema(tmp_path: Path):
+    images_dir = tmp_path / "images"
+    images_dir.mkdir()
+    image = images_dir / "panel1.png"
+    image.write_bytes(b"fake")
+    image.with_suffix(".txt").write_text("\u5192\u967a\u306b\u884c\u304f \u52c7\u8005", encoding="utf-8")
+
+    data_dir = tmp_path / "data"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "scan",
+            "--images",
+            str(images_dir),
+            "--source",
+            "manga-a",
+            "--run-id",
+            "schema-1",
+            "--data-dir",
+            str(data_dir),
+            "--ocr-mode",
+            "sidecar",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads((data_dir / "manga-a" / "schema-1" / "scan.json").read_text(encoding="utf-8"))
+    first_normalized = payload["records"][0]["normalized_candidates"][0]
+    assert set(first_normalized.keys()) == {"surface", "lemma", "method", "confidence", "reason"}
+    assert isinstance(first_normalized["confidence"], float)
+
+
+def test_scan_uses_alternate_text_candidates_and_dedupes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from jp_anki_builder import scan as scan_module
+
+    images_dir = tmp_path / "images"
+    images_dir.mkdir()
+    image = images_dir / "panel1.png"
+    image.write_bytes(b"fake")
+
+    class FakeProvider:
+        def extract_text_candidates(self, image_path: Path, top_n: int = 8) -> list[str]:
+            return ["\u596a\u308f\u308c\u308b", "\u6b69\u304b\u3055\u308c\u308b", "\u596a\u308f\u308c\u308b"]
+
+    monkeypatch.setattr(
+        scan_module,
+        "build_ocr_provider",
+        lambda mode, language="jpn", tesseract_cmd=None, preprocess=True: FakeProvider(),
+    )
+
+    data_dir = tmp_path / "data"
+    dict_dir = data_dir / "dictionaries"
+    dict_dir.mkdir(parents=True)
+    (dict_dir / "offline.json").write_text("{}", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "scan",
+            "--images",
+            str(images_dir),
+            "--source",
+            "manga-a",
+            "--run-id",
+            "alt-1",
+            "--data-dir",
+            str(data_dir),
+            "--ocr-mode",
+            "sidecar",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads((data_dir / "manga-a" / "alt-1" / "scan.json").read_text(encoding="utf-8"))
+    assert "\u596a\u3046" in payload["candidates"]
+    assert "\u6b69\u304f" in payload["candidates"]
+    assert payload["records"][0]["alternate_texts"] == ["\u6b69\u304b\u3055\u308c\u308b", "\u596a\u308f\u308c\u308b"]
+
+def test_scan_rejects_invalid_online_dict_value(tmp_path: Path):
+    images_dir = tmp_path / "images"
+    images_dir.mkdir()
+    image = images_dir / "panel1.png"
+    image.write_bytes(b"fake")
+    image.with_suffix(".txt").write_text("\u5192\u967a", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "scan",
+            "--images",
+            str(images_dir),
+            "--source",
+            "manga-a",
+            "--run-id",
+            "bad-online",
+            "--ocr-mode",
+            "sidecar",
+            "--online-dict",
+            "invalid",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "unsupported online dictionary mode" in result.output
