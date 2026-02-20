@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from jp_anki_builder import normalization
 from jp_anki_builder.normalization import RuleBasedNormalizer
 
 
@@ -23,3 +24,15 @@ def test_rule_based_normalizer_keeps_current_verb_regressions_fixed():
     lemmas = [entry.lemma for entry in normalizer.normalize_text("奪われる 歩かされる")]
     assert "奪う" in lemmas
     assert "歩く" in lemmas
+
+
+def test_rule_based_normalizer_prefers_dictionary_validated_option(monkeypatch):
+    normalizer_obj = RuleBasedNormalizer()
+    monkeypatch.setattr(normalization, "extract_token_sequence", lambda text: ["役立たず"])
+    monkeypatch.setattr(normalization, "extract_candidate_token_sequence", lambda text: ["役立つ"])
+    monkeypatch.setattr(normalization, "is_candidate_token", lambda token: True)
+
+    result = normalizer_obj.normalize_text("役立たず", word_exists=lambda word: word == "役立たず")
+
+    assert result[0].lemma == "役立たず"
+    assert result[0].reason == "dictionary_validated"

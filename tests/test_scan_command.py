@@ -16,7 +16,7 @@ class _FakeNormalizer:
         self._words = words
         self.method_name = "rule_based"
 
-    def normalize_text(self, text: str) -> list[NormalizedCandidate]:
+    def normalize_text(self, text: str, word_exists=None) -> list[NormalizedCandidate]:
         return [
             NormalizedCandidate(
                 surface=word,

@@ -102,3 +102,11 @@ def test_extract_candidate_sequence_keeps_negative_lexicalized_compound():
     assert "\u5f79\u7acb\u305f\u305a" in tokenize.extract_candidate_token_sequence(
         "\u5f79\u7acb\u305f\u305a\u304b\u3002"
     )
+
+
+def test_extract_candidates_normalizes_causative_passive_to_root_dictionary_form():
+    assert tokenize.extract_candidates("\u6b69\u304b\u3055\u308c\u308b") == ["\u6b69\u304f"]
+
+
+def test_extract_candidates_normalizes_another_causative_passive_to_root():
+    assert tokenize.extract_candidates("\u8aad\u307e\u3055\u308c\u308b") == ["\u8aad\u3080"]

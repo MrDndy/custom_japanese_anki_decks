@@ -97,7 +97,7 @@ def run_scan(
             sequence = extract_token_sequence(candidate_text)
             if not primary_surface_tokens:
                 primary_surface_tokens = sequence
-            normalized = normalizer.normalize_text(candidate_text)
+            normalized = normalizer.normalize_text(candidate_text, word_exists=word_exists)
             base = [entry.lemma for entry in normalized]
             candidates.extend(base)
             normalized_records.extend(asdict(entry) for entry in normalized)

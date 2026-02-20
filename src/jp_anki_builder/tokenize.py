@@ -12,6 +12,17 @@ PARTICLES = {"は", "が", "を", "に", "で", "と", "も", "の", "へ", "か
 POS_VERB = "\u52d5\u8a5e"
 POS_AUXILIARY = "\u52a9\u52d5\u8a5e"
 FORM_MIZEN = "\u672a\u7136\u5f62"
+MIZEN_TO_DICTIONARY_ENDING = {
+    "\u304b": "\u304f",  # か -> く
+    "\u304c": "\u3050",  # が -> ぐ
+    "\u3055": "\u3059",  # さ -> す
+    "\u305f": "\u3064",  # た -> つ
+    "\u306a": "\u306c",  # な -> ぬ
+    "\u3070": "\u3076",  # ば -> ぶ
+    "\u307e": "\u3080",  # ま -> む
+    "\u3089": "\u308b",  # ら -> る
+    "\u308f": "\u3046",  # わ -> う
+}
 
 
 def _build_word_tokenizer() -> Callable[[str], list[str]] | None:
@@ -38,7 +49,7 @@ def _build_word_tokenizer() -> Callable[[str], list[str]] | None:
                     i += 2
                     continue
                 if _is_mizen_aux_start(word, nxt):
-                    lemma = _lemma_form(word)
+                    lemma = _mizen_aux_root_form(word, nxt) or _lemma_form(word)
                     if lemma:
                         tokens.append(lemma)
                         i += 2
@@ -109,6 +120,22 @@ def _is_mizen_aux_start(word, next_word) -> bool:
         and str(_feature_value(feature, "cForm")).startswith(FORM_MIZEN)
         and _pos1(next_word) == POS_AUXILIARY
     )
+
+
+def _mizen_aux_root_form(word, next_word) -> str | None:
+    # Handle causative-passive style stems:
+    # 歩かされる -> tokenized as 歩かさ + れる (lemma 歩かす), desired root is 歩く.
+    next_surface = getattr(next_word, "surface", "")
+    if next_surface not in {"\u308c\u308b", "\u3089\u308c\u308b"}:
+        return None
+    surface = getattr(word, "surface", "")
+    if len(surface) < 2 or not surface.endswith("\u3055"):
+        return None
+    penultimate = surface[-2]
+    mapped = MIZEN_TO_DICTIONARY_ENDING.get(penultimate)
+    if not mapped:
+        return None
+    return f"{surface[:-2]}{mapped}"
 
 
 def _is_negative_aux_pair(word, next_word) -> bool:
