@@ -7,7 +7,26 @@ import pytest
 from typer.testing import CliRunner
 
 from jp_anki_builder.cli import app
+from jp_anki_builder.normalization import NormalizedCandidate
 from jp_anki_builder.ocr import OcrError
+
+
+class _FakeNormalizer:
+    def __init__(self, words: list[str]):
+        self._words = words
+        self.method_name = "rule_based"
+
+    def normalize_text(self, text: str) -> list[NormalizedCandidate]:
+        return [
+            NormalizedCandidate(
+                surface=word,
+                lemma=word,
+                method="rule_based",
+                confidence=0.9,
+                reason="lemma_normalized",
+            )
+            for word in self._words
+        ]
 
 
 def test_scan_writes_artifact_from_sidecar_ocr(tmp_path: Path):
@@ -49,6 +68,9 @@ def test_scan_writes_artifact_from_sidecar_ocr(tmp_path: Path):
     assert "\u5192\u967a" in payload["candidates"]
     assert "\u884c\u304f" in payload["candidates"]
     assert "\u52c7\u8005" in payload["candidates"]
+    assert payload["normalization_method"] == "rule_based"
+    assert payload["records"][0]["surface_tokens"]
+    assert payload["records"][0]["normalized_candidates"]
 
 
 def test_scan_errors_when_no_images_found(tmp_path: Path):
@@ -153,7 +175,7 @@ def test_scan_adds_compound_candidates_from_offline_dictionary(tmp_path: Path, m
     )
 
     monkeypatch.setattr(scan_module, "extract_token_sequence", lambda text: ["無駄飯", "食い"])
-    monkeypatch.setattr(scan_module, "extract_candidates", lambda text: ["無駄飯", "食い"])
+    monkeypatch.setattr(scan_module, "get_default_normalizer", lambda: _FakeNormalizer(["無駄飯", "食い"]))
 
     result = CliRunner().invoke(
         app,
@@ -194,7 +216,7 @@ def test_scan_adds_compound_candidates_with_online_fallback(tmp_path: Path, monk
     (dict_dir / "offline.json").write_text("{}", encoding="utf-8")
 
     monkeypatch.setattr(scan_module, "extract_token_sequence", lambda text: ["無駄飯", "食い"])
-    monkeypatch.setattr(scan_module, "extract_candidates", lambda text: ["無駄飯", "食い"])
+    monkeypatch.setattr(scan_module, "get_default_normalizer", lambda: _FakeNormalizer(["無駄飯", "食い"]))
 
     class FakeOnline:
         def lookup(self, word, exact_match: bool = False):
@@ -247,7 +269,7 @@ def test_scan_does_not_merge_across_particle_boundary(tmp_path: Path, monkeypatc
     )
 
     monkeypatch.setattr(scan_module, "extract_token_sequence", lambda text: ["足", "が", "痛い"])
-    monkeypatch.setattr(scan_module, "extract_candidates", lambda text: ["足", "痛い"])
+    monkeypatch.setattr(scan_module, "get_default_normalizer", lambda: _FakeNormalizer(["足", "痛い"]))
 
     result = CliRunner().invoke(
         app,
@@ -291,7 +313,7 @@ def test_scan_merges_lexicalized_negative_compound_when_dictionary_has_it(tmp_pa
     )
 
     monkeypatch.setattr(scan_module, "extract_token_sequence", lambda text: ["役立た", "ず"])
-    monkeypatch.setattr(scan_module, "extract_candidates", lambda text: ["役立た"])
+    monkeypatch.setattr(scan_module, "get_default_normalizer", lambda: _FakeNormalizer(["役立た"]))
 
     result = CliRunner().invoke(
         app,

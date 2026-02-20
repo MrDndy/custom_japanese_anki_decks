@@ -57,9 +57,14 @@ Deck name in Anki:
 ## What `run` does
 
 `run` executes:
-1. `scan` (OCR + candidate extraction)
+1. `scan` (OCR + surface token extraction + internal normalization)
 2. `review` (filters known words, particles, already-seen words)
 3. `build` (dictionary enrichment + Anki package export)
+
+Normalization behavior:
+- The app uses one active internal normalizer (`rule_based`) by default.
+- There is no user-facing normalizer flag in the CLI.
+- `scan.json` now records normalization metadata per image for easier troubleshooting and future quality tuning.
 
 It stops early with clear messages if:
 - scan finds no candidates

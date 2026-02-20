@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from jp_anki_builder.config import RunPaths
 from jp_anki_builder.dictionary import JishoOnlineDictionary, NullOnlineDictionary, OfflineJsonDictionary
+from jp_anki_builder.normalization import get_default_normalizer
 from jp_anki_builder.ocr import build_ocr_provider
-from jp_anki_builder.tokenize import extract_candidates, extract_token_sequence, is_candidate_token
+from jp_anki_builder.tokenize import extract_token_sequence, is_candidate_token
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
@@ -79,6 +80,8 @@ def run_scan(
         return hit
     records: list[dict] = []
     all_candidates: list[str] = []
+    normalizer = get_default_normalizer()
+    normalization_method = getattr(normalizer, "method_name", "rule_based")
 
     for image_path in files:
         if hasattr(provider, "extract_text_candidates"):
@@ -88,10 +91,16 @@ def run_scan(
 
         text = texts[0] if texts else ""
         candidates: list[str] = []
+        normalized_records: list[dict] = []
+        primary_surface_tokens: list[str] = []
         for candidate_text in texts:
             sequence = extract_token_sequence(candidate_text)
-            base = extract_candidates(candidate_text)
+            if not primary_surface_tokens:
+                primary_surface_tokens = sequence
+            normalized = normalizer.normalize_text(candidate_text)
+            base = [entry.lemma for entry in normalized]
             candidates.extend(base)
+            normalized_records.extend(asdict(entry) for entry in normalized)
             surface_candidates = {token for token in sequence if is_candidate_token(token)}
             candidates.extend(_merge_compound_candidates(sequence, surface_candidates, word_exists))
         candidates = list(dict.fromkeys(candidates))
@@ -101,6 +110,8 @@ def run_scan(
                 "image": str(image_path),
                 "text": text,
                 "alternate_texts": texts[1:6],
+                "surface_tokens": primary_surface_tokens,
+                "normalized_candidates": normalized_records,
                 "candidates": candidates,
             }
         )
@@ -111,6 +122,7 @@ def run_scan(
         "run_id": run_id,
         "ocr_mode": ocr_mode,
         "ocr_language": ocr_language,
+        "normalization_method": normalization_method,
         "online_dict": online_dict,
         "image_count": len(files),
         "records": records,
