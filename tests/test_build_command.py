@@ -96,7 +96,7 @@ def test_build_uses_online_fallback_when_offline_missing(tmp_path: Path, monkeyp
                 return {"reading": "みとうろくご", "meanings": ["unknown term"]}
             return None
 
-    monkeypatch.setattr(build_module, "JishoOnlineDictionary", lambda: FakeOnline())
+    monkeypatch.setattr(build_module, "build_online_dictionary", lambda mode: FakeOnline())
 
     result = CliRunner().invoke(
         app,

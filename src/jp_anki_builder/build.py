@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 from dataclasses import dataclass
 from pathlib import Path
 
 from jp_anki_builder.cards import build_deck_name, build_note_fields
 from jp_anki_builder.config import RunPaths
-from jp_anki_builder.dictionary import JishoOnlineDictionary, NullOnlineDictionary, OfflineJsonDictionary
+from jp_anki_builder.dictionary import WordExistsCache, build_offline_dictionary, build_online_dictionary
 from jp_anki_builder.enrich import enrich_word
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -32,8 +35,8 @@ class NoBuildableWordsError(RuntimeError):
 
 
 def _stable_id(seed_text: str) -> int:
-    random.seed(seed_text)
-    return random.randint(1_000_000_000, 2_000_000_000)
+    rng = random.Random(seed_text)
+    return rng.randint(1_000_000_000, 2_000_000_000)
 
 
 def _model_id() -> int:
@@ -61,17 +64,20 @@ def run_build(
     payload = json.loads(paths.review_artifact.read_text(encoding="utf-8-sig"))
     approved_words = payload.get("approved_candidates", [])
 
-    offline = OfflineJsonDictionary(Path(base_dir) / "dictionaries" / "offline.json")
-    if online_dict == "off":
-        online = NullOnlineDictionary()
-    elif online_dict == "jisho":
-        online = JishoOnlineDictionary()
-    else:
-        raise ValueError("unsupported online dictionary mode. Use: off or jisho.")
+    offline = build_offline_dictionary(base_dir)
+    online = build_online_dictionary(online_dict)
 
+    # Pre-warm word existence cache from scan stage
+    cache = WordExistsCache(offline, online)
+    cache.load(paths.word_cache)
+
+    logger.info("building deck for %d approved word(s)", len(approved_words))
     enriched = [enrich_word(word, offline=offline, online=online, max_meanings=3) for word in approved_words]
     buildable = [item for item in enriched if item.get("meanings")]
     missing_meaning_words = [item["word"] for item in enriched if not item.get("meanings")]
+
+    if missing_meaning_words:
+        logger.warning("no dictionary entry for: %s", ", ".join(missing_meaning_words))
 
     if not buildable:
         raise NoBuildableWordsError(

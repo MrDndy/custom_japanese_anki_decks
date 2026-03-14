@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import gzip
 import json
+import logging
 import tempfile
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+from jp_anki_builder.jlpt import JLPT_DATA_FILENAME
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_JMDICT_E_URL = "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz"
 
@@ -86,3 +90,38 @@ def _extract_english_glosses(entry: ET.Element) -> list[str]:
             continue
         out.append(text)
     return out
+
+
+def install_jlpt_from_file(
+    source_path: str,
+    base_dir: str = "data",
+) -> DictInstallSummary:
+    """Install JLPT level data from a JSON file.
+
+    Expected format: {"word": level, ...} where level is 1-5.
+    Example: {"食べる": 5, "冒険": 2, ...}
+    """
+    src = Path(source_path)
+    if not src.exists():
+        raise FileNotFoundError(f"JLPT source file not found: {source_path}")
+
+    raw = json.loads(src.read_text(encoding="utf-8-sig"))
+    # Validate: all values must be ints 1-5
+    data: dict[str, int] = {}
+    for word, level in raw.items():
+        lvl = int(level)
+        if lvl < 1 or lvl > 5:
+            logger.warning("skipping %r: invalid JLPT level %d", word, lvl)
+            continue
+        data[word] = lvl
+
+    output_path = Path(base_dir) / "dictionaries" / JLPT_DATA_FILENAME
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+    return DictInstallSummary(
+        provider="jlpt_json",
+        source_url=str(src),
+        output_path=str(output_path),
+        entry_count=len(data),
+    )
