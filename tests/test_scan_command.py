@@ -68,7 +68,7 @@ def test_scan_writes_artifact_from_sidecar_ocr(tmp_path: Path):
     assert "\u5192\u967a" in payload["candidates"]
     assert "\u884c\u304f" in payload["candidates"]
     assert "\u52c7\u8005" in payload["candidates"]
-    assert payload["normalization_method"] == "rule_based"
+    assert payload["normalization_method"] == "sudachi_nlp"
     assert payload["records"][0]["surface_tokens"]
     assert payload["records"][0]["normalized_candidates"]
 
@@ -224,7 +224,7 @@ def test_scan_adds_compound_candidates_with_online_fallback(tmp_path: Path, monk
                 return {"reading": "むだめしくい", "meanings": ["good-for-nothing"]}
             return None
 
-    monkeypatch.setattr(scan_module, "JishoOnlineDictionary", lambda: FakeOnline())
+    monkeypatch.setattr(scan_module, "build_online_dictionary", lambda mode: FakeOnline())
 
     result = CliRunner().invoke(
         app,
@@ -365,8 +365,16 @@ def test_scan_artifact_includes_normalized_entry_schema(tmp_path: Path):
     assert result.exit_code == 0
     payload = json.loads((data_dir / "manga-a" / "schema-1" / "scan.json").read_text(encoding="utf-8"))
     first_normalized = payload["records"][0]["normalized_candidates"][0]
-    assert set(first_normalized.keys()) == {"surface", "lemma", "method", "confidence", "reason"}
+    assert set(first_normalized.keys()) == {
+        "surface",
+        "lemma",
+        "method",
+        "confidence",
+        "reason",
+        "surface_chain",
+    }
     assert isinstance(first_normalized["confidence"], float)
+    assert isinstance(first_normalized["surface_chain"], list)
 
 
 def test_scan_uses_alternate_text_candidates_and_dedupes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

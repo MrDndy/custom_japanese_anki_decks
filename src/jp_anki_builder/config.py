@@ -35,3 +35,7 @@ class RunPaths:
     @property
     def deck_package(self) -> Path:
         return self.run_dir / "deck.apkg"
+
+    @property
+    def word_cache(self) -> Path:
+        return self.run_dir / "word_cache.json"

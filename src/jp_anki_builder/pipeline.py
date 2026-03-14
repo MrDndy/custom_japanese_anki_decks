@@ -21,6 +21,7 @@ class Pipeline:
         tesseract_cmd: str | None = None,
         preprocess: bool = True,
         online_dict: str = "off",
+        resume: bool = False,
     ) -> dict:
         summary = run_scan(
             images=images,
@@ -32,6 +33,7 @@ class Pipeline:
             tesseract_cmd=tesseract_cmd,
             preprocess=preprocess,
             online_dict=online_dict,
+            resume=resume,
         )
         return {
             "stage": "scan",
@@ -40,6 +42,7 @@ class Pipeline:
             "candidate_count": summary.candidate_count,
             "candidates": summary.candidates,
             "artifact_path": str(summary.artifact_path),
+            "resumed": summary.resumed,
         }
 
     def review(
@@ -112,6 +115,7 @@ class Pipeline:
         volume: str | None = None,
         chapter: str | None = None,
         online_dict: str = "off",
+        resume: bool = False,
     ) -> dict:
         scan_result = self.scan(
             images=images,
@@ -122,6 +126,7 @@ class Pipeline:
             tesseract_cmd=tesseract_cmd,
             preprocess=preprocess,
             online_dict=online_dict,
+            resume=resume,
         )
         review_result = self.review(
             source=source,

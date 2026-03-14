@@ -98,7 +98,7 @@ def test_run_fails_when_no_buildable_words_remain(tmp_path: Path):
     assert "[REVIEW]" in result.output
     assert "[BUILD]" in result.output
     assert "No cards were created for this run." in result.output
-    assert "Missing meaning (2): 未知, 語" in result.output
+    assert "Missing meaning (1): 未知語" in result.output
 
 
 def test_run_stops_after_review_when_no_approved_words(tmp_path: Path):

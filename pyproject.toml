@@ -14,12 +14,24 @@ dependencies = [
   "Pillow>=10.0.0",
 ]
 
+[project.scripts]
+jp-anki-build = "jp_anki_builder.cli:app"
+
 [project.optional-dependencies]
 japanese_nlp = [
   "fugashi>=1.3.0",
   "unidic-lite>=1.0.8",
+  "sudachipy>=0.6.10",
+  "sudachidict_core>=20260116",
 ]
 manga_ocr = [
+  "manga-ocr>=0.1.14",
+]
+recommended = [
+  "fugashi>=1.3.0",
+  "unidic-lite>=1.0.8",
+  "sudachipy>=0.6.10",
+  "sudachidict_core>=20260116",
   "manga-ocr>=0.1.14",
 ]
 
