@@ -1,36 +1,59 @@
-﻿from jp_anki_builder.filtering import filter_tokens
+from jp_anki_builder.filtering import filter_tokens
 
 
 def test_filter_tokens_excludes_particles_and_known_words():
-    tokens = ["私", "は", "学生", "です"]
-    known = {"学生"}
+    tokens = ["\u79c1", "\u306f", "\u5b66\u751f", "\u3067\u3059"]
+    known = {"\u5b66\u751f"}
     result = filter_tokens(tokens, known_words=known)
-    assert result == ["私", "です"]
+    assert result == ["\u79c1", "\u3067\u3059"]
 
 
 def test_filter_tokens_excludes_naa_and_kanji_one_to_ten():
     tokens = [
-        "なぁ",
-        "一",
-        "二",
-        "三",
-        "四",
-        "五",
-        "六",
-        "七",
-        "八",
-        "九",
-        "十",
-        "人",
-        "する",
-        "為る",
-        "いる",
-        "居る",
-        "てる",
-        "この",
-        "その",
-        "あの",
-        "冒険",
+        "\u306a\u3041",
+        "\u4e00",
+        "\u4e8c",
+        "\u4e09",
+        "\u56db",
+        "\u4e94",
+        "\u516d",
+        "\u4e03",
+        "\u516b",
+        "\u4e5d",
+        "\u5341",
+        "\u4eba",
+        "\u3059\u308b",
+        "\u70ba\u308b",
+        "\u3044\u308b",
+        "\u5c45\u308b",
+        "\u3066\u308b",
+        "\u3053\u306e",
+        "\u305d\u306e",
+        "\u3042\u306e",
+        "\u5192\u967a",
     ]
     result = filter_tokens(tokens, known_words=set())
-    assert result == ["冒険"]
+    assert result == ["\u5192\u967a"]
+
+
+def test_filter_tokens_excludes_common_noise_tokens_from_scan_feedback():
+    tokens = [
+        "\u3069\u306e",
+        "\u3082\u306e",
+        "\u3072\u3068",
+        "\u307e\u3067",
+        "\u304b\u3089",
+        "\u306a\u3093",
+        "\u3053\u3053",
+        "\u3059\u3050",
+        "\u3084\u308b",
+        "\u3088\u301c",
+        "\u306a\u301c",
+        "\u304a\u3044\u3063",
+        "\u30ca\u30f3\u30c0\u30ab\u30e9",
+        "\u30b1",
+        "\u50cd\u308b",
+        "\u8db3",
+    ]
+    result = filter_tokens(tokens, known_words=set())
+    assert result == ["\u8db3"]
