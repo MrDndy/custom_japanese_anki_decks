@@ -1,0 +1,362 @@
+{
+  "title": "Building a Japanese OCR-to-Anki Pipeline for Manga, Games, and Subtitles",
+  "created_from": "Deep Research output converted into tool-friendly structure",
+  "preferred_for_ai_tools": true,
+  "summary": {
+    "problem": [
+      "Acquire Japanese text from images, games, manga, or subtitles when copy/paste is unavailable.",
+      "Normalize recognized text into dictionary form for lookup and Anki card creation."
+    ],
+    "best_overall_mvp": {
+      "capture": [
+        "Windows.Graphics.Capture",
+        "Desktop Duplication API"
+      ],
+      "ocr": [
+        "manga-ocr for manga",
+        "Tesseract jpn/jpn_vert or Windows OCR as general fallback"
+      ],
+      "normalization": [
+        "SudachiPy or MeCab+UniDic"
+      ],
+      "fallback_deinflection": [
+        "Yomitan-style rule engine"
+      ],
+      "anki_integration": [
+        "AnkiConnect"
+      ]
+    }
+  },
+  "architecture": {
+    "acquisition_methods": [
+      {
+        "method": "direct_text_hooking",
+        "best_for": [
+          "visual novels",
+          "some PC games"
+        ],
+        "tools": [
+          "Textractor"
+        ],
+        "pros": [
+          "No OCR errors",
+          "Captures text before rasterization"
+        ],
+        "cons": [
+          "Engine dependent",
+          "Licensing constraints",
+          "May not work on all modern titles"
+        ]
+      },
+      {
+        "method": "subtitle_stream_extraction",
+        "best_for": [
+          "videos with text subtitle tracks"
+        ],
+        "tools": [
+          "subtitle parsers for SRT/ASS/SSA/MKV tracks"
+        ],
+        "pros": [
+          "Cleaner than OCR",
+          "Fast and exact when track is text-based"
+        ],
+        "cons": [
+          "Not usable for burned-in subtitles"
+        ]
+      },
+      {
+        "method": "accessibility_or_ui_api",
+        "best_for": [
+          "standard desktop applications"
+        ],
+        "tools": [
+          "OS accessibility / UI APIs"
+        ],
+        "pros": [
+          "No OCR needed"
+        ],
+        "cons": [
+          "Often unavailable for games"
+        ]
+      },
+      {
+        "method": "screen_capture_plus_ocr",
+        "best_for": [
+          "games",
+          "digital manga",
+          "burned-in subtitles",
+          "general fallback"
+        ],
+        "tools": [
+          "Windows.Graphics.Capture",
+          "Desktop Duplication API",
+          "ScreenCaptureKit",
+          "PipeWire portals"
+        ],
+        "pros": [
+          "Universal fallback",
+          "Works broadly"
+        ],
+        "cons": [
+          "OCR errors",
+          "Needs post-processing",
+          "Protected content may fail"
+        ]
+      }
+    ],
+    "ocr_options": [
+      {
+        "name": "manga-ocr",
+        "best_for": [
+          "digital manga",
+          "vertical/horizontal manga text",
+          "furigana-heavy text"
+        ],
+        "strengths": [
+          "Purpose-built for manga",
+          "Good with stylized text"
+        ],
+        "weaknesses": [
+          "Less general outside manga layouts"
+        ]
+      },
+      {
+        "name": "Tesseract",
+        "best_for": [
+          "general local OCR",
+          "offline OCR"
+        ],
+        "strengths": [
+          "Open source",
+          "Supports jpn and jpn_vert"
+        ],
+        "weaknesses": [
+          "May underperform specialized models on noisy manga/game text"
+        ]
+      },
+      {
+        "name": "Windows.Media.Ocr",
+        "best_for": [
+          "Windows-only local apps"
+        ],
+        "strengths": [
+          "Fast local OCR",
+          "Structured output"
+        ],
+        "weaknesses": [
+          "Windows-specific constraints"
+        ]
+      },
+      {
+        "name": "Google Cloud Vision",
+        "best_for": [
+          "cloud fallback",
+          "high-accuracy remote OCR modes"
+        ],
+        "strengths": [
+          "Strong OCR quality",
+          "Language support"
+        ],
+        "weaknesses": [
+          "Cost",
+          "Latency",
+          "Privacy concerns"
+        ]
+      },
+      {
+        "name": "Azure Read OCR",
+        "best_for": [
+          "cloud fallback",
+          "mixed-language OCR"
+        ],
+        "strengths": [
+          "Strong multilingual support"
+        ],
+        "weaknesses": [
+          "Cost",
+          "Latency",
+          "Privacy concerns"
+        ]
+      }
+    ],
+    "lemmatization_and_deinflection": {
+      "primary_tools": [
+        {
+          "name": "SudachiPy",
+          "fields": [
+            "surface",
+            "dictionary_form",
+            "normalized_form",
+            "reading_form"
+          ],
+          "use_case": "Best first implementation for tokenization + lemma + reading"
+        },
+        {
+          "name": "MeCab + UniDic via fugashi",
+          "fields": [
+            "lemma",
+            "base orthography",
+            "reading",
+            "POS"
+          ],
+          "use_case": "Strong alternative with mature ecosystem"
+        }
+      ],
+      "fallback_tools": [
+        {
+          "name": "Yomitan-style rule-based deinflection",
+          "use_case": "Recover dictionary candidates when OCR noise or partial selection breaks tokenization"
+        }
+      ]
+    },
+    "anki_integration": {
+      "tool": "AnkiConnect",
+      "recommended_fields": [
+        "expression_surface",
+        "expression_lemma",
+        "reading",
+        "definition",
+        "example_sentence",
+        "source_title",
+        "source_context",
+        "screenshot_path",
+        "tags"
+      ]
+    }
+  },
+  "recommended_toolchains": {
+    "games_and_visual_novels": {
+      "preferred": [
+        "direct text hooking when supported"
+      ],
+      "fallback": [
+        "ROI capture",
+        "OCR",
+        "SudachiPy",
+        "AnkiConnect"
+      ]
+    },
+    "digital_manga": {
+      "preferred": [
+        "manga-ocr",
+        "optional speech bubble detection",
+        "SudachiPy or MeCab+UniDic",
+        "AnkiConnect"
+      ]
+    },
+    "video_subtitles": {
+      "preferred": [
+        "extract subtitle text tracks directly"
+      ],
+      "fallback": [
+        "subtitle region OCR",
+        "lemmatization",
+        "AnkiConnect"
+      ]
+    }
+  },
+  "implementation_priorities": [
+    "Build region capture + OCR + lemma pipeline first",
+    "Use manga-ocr for manga",
+    "Use Windows capture APIs for live Windows app/game capture",
+    "Add Yomitan-style deinflection after lemma pipeline works",
+    "Add direct extraction later for hooks and subtitle streams"
+  ],
+  "risks_and_constraints": {
+    "capture": [
+      "Protected content may not be capturable",
+      "Some OS APIs require user consent or system UI"
+    ],
+    "privacy": [
+      "Cloud OCR introduces data handling concerns",
+      "Local OCR is better for personal study workflows"
+    ],
+    "licensing": [
+      "Textractor uses GPL-3.0",
+      "Dictionary datasets may have redistribution constraints"
+    ]
+  },
+  "sources": [
+    {
+      "name": "Textractor",
+      "url": "https://github.com/Artikash/Textractor",
+      "category": "text_hooking"
+    },
+    {
+      "name": "Windows Graphics Capture",
+      "url": "https://learn.microsoft.com/en-us/windows/uwp/audio-video-camera/screen-capture",
+      "category": "screen_capture"
+    },
+    {
+      "name": "Desktop Duplication API",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/desktop-dup-api",
+      "category": "screen_capture"
+    },
+    {
+      "name": "Matroska subtitle formats",
+      "url": "https://www.matroska.org/technical/subtitles.html",
+      "category": "subtitles"
+    },
+    {
+      "name": "ScreenCaptureKit",
+      "url": "https://developer.apple.com/documentation/screencapturekit/",
+      "category": "screen_capture"
+    },
+    {
+      "name": "Tesseract data files",
+      "url": "https://tesseract-ocr.github.io/tessdoc/Data-Files.html",
+      "category": "ocr"
+    },
+    {
+      "name": "manga-ocr",
+      "url": "https://github.com/kha-white/manga-ocr",
+      "category": "ocr"
+    },
+    {
+      "name": "Google Cloud Vision OCR",
+      "url": "https://docs.cloud.google.com/vision/docs/ocr",
+      "category": "ocr"
+    },
+    {
+      "name": "Azure OCR overview",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/overview-ocr",
+      "category": "ocr"
+    },
+    {
+      "name": "SudachiPy morpheme API",
+      "url": "https://worksapplications.github.io/sudachi.rs/python/api/sudachipy.morpheme.html",
+      "category": "lemmatization"
+    },
+    {
+      "name": "Sudachi Morpheme.java",
+      "url": "https://github.com/WorksApplications/Sudachi/blob/develop/src/main/java/com/worksap/nlp/sudachi/Morpheme.java",
+      "category": "lemmatization"
+    },
+    {
+      "name": "fugashi",
+      "url": "https://github.com/polm/fugashi",
+      "category": "lemmatization"
+    },
+    {
+      "name": "unidic-py",
+      "url": "https://github.com/polm/unidic-py",
+      "category": "lemmatization"
+    },
+    {
+      "name": "Yomitan language features",
+      "url": "https://github.com/yomidevs/yomitan/blob/master/docs/development/language-features.md",
+      "category": "deinflection"
+    },
+    {
+      "name": "Yomichan",
+      "url": "https://github.com/FooSoft/yomichan",
+      "category": "deinflection"
+    },
+    {
+      "name": "AnkiConnect",
+      "url": "https://github.com/amikey/anki-connect",
+      "category": "anki_integration"
+    }
+  ],
+  "companion_markdown_file": "japanese_ocr_to_anki_research.md"
+}
