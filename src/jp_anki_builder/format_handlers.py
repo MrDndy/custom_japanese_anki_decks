@@ -242,6 +242,26 @@ def _handle_epub(path: Path) -> list[PageResult]:
 
 
 # ---------------------------------------------------------------------------
+# Spread detection
+# ---------------------------------------------------------------------------
+
+def detect_and_split_spread(image: PilImage.Image, threshold: float = 1.3) -> list[PilImage.Image]:
+    """Returns [image] if not a spread, or [right_half, left_half] if it is.
+
+    Detection: width/height ratio > threshold indicates a double-page spread.
+    Splitting: right half first, then left half (Japanese reading order).
+    """
+    width, height = image.size
+    if height == 0 or width / height <= threshold:
+        return [image]
+
+    mid = width // 2
+    right_half = image.crop((mid, 0, width, height))
+    left_half = image.crop((0, 0, mid, height))
+    return [right_half, left_half]
+
+
+# ---------------------------------------------------------------------------
 # Public factory
 # ---------------------------------------------------------------------------
 
