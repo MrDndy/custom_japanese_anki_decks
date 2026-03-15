@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from jp_anki_builder.config import RunPaths
-from jp_anki_builder.filtering import DEFAULT_PARTICLES
+from jp_anki_builder.filtering import DEFAULT_PARTICLES, is_sfx_token
 
 
 @dataclass
@@ -18,6 +19,7 @@ class ReviewSummary:
     excluded_particles: list[str]
     excluded_seen: list[str]
     excluded_manual: list[str]
+    excluded_sfx: list[str]
 
 
 @dataclass
@@ -29,6 +31,7 @@ class ReviewPlan:
     excluded_known: list[str]
     excluded_particles: list[str]
     excluded_seen: list[str]
+    excluded_sfx: list[str]
 
 
 def _ordered_unique(words: list[str]) -> list[str]:
@@ -77,9 +80,17 @@ def run_review(
     exclude: list[str] | None = None,
     save_excluded_to_known: bool = False,
     review_plan: ReviewPlan | None = None,
+    exclude_sfx: bool = True,
+    word_exists: Callable[[str], bool] | None = None,
 ) -> ReviewSummary:
     paths = RunPaths(base_dir=base_dir, source_id=source, run_id=run_id)
-    plan = review_plan or prepare_review(source=source, run_id=run_id, base_dir=base_dir)
+    plan = review_plan or prepare_review(
+        source=source,
+        run_id=run_id,
+        base_dir=base_dir,
+        exclude_sfx=exclude_sfx,
+        word_exists=word_exists,
+    )
     candidates = plan.initial_candidates
     deduped = plan.filtered_candidates
     seen_words = _load_seen_words(paths.source_seen_words)
@@ -95,6 +106,7 @@ def run_review(
         "excluded_known": plan.excluded_known,
         "excluded_particles": plan.excluded_particles,
         "excluded_seen": plan.excluded_seen,
+        "excluded_sfx": plan.excluded_sfx,
         "excluded_manual": sorted(excluded_manual),
     }
     paths.review_artifact.write_text(
@@ -118,11 +130,18 @@ def run_review(
         excluded_known=plan.excluded_known,
         excluded_particles=plan.excluded_particles,
         excluded_seen=plan.excluded_seen,
+        excluded_sfx=plan.excluded_sfx,
         excluded_manual=sorted(excluded_manual),
     )
 
 
-def prepare_review(source: str, run_id: str, base_dir: str = "data") -> ReviewPlan:
+def prepare_review(
+    source: str,
+    run_id: str,
+    base_dir: str = "data",
+    exclude_sfx: bool = True,
+    word_exists: Callable[[str], bool] | None = None,
+) -> ReviewPlan:
     paths = RunPaths(base_dir=base_dir, source_id=source, run_id=run_id)
     if not paths.scan_artifact.exists():
         raise ValueError(f"scan artifact not found: {paths.scan_artifact}")
@@ -135,6 +154,7 @@ def prepare_review(source: str, run_id: str, base_dir: str = "data") -> ReviewPl
     excluded_known: list[str] = []
     excluded_particles: list[str] = []
     excluded_seen: list[str] = []
+    excluded_sfx: list[str] = []
     deduped: list[str] = []
 
     for token in candidates:
@@ -146,6 +166,9 @@ def prepare_review(source: str, run_id: str, base_dir: str = "data") -> ReviewPl
             continue
         if token in seen_words or token in local_seen:
             excluded_seen.append(token)
+            continue
+        if exclude_sfx and is_sfx_token(token, word_exists):
+            excluded_sfx.append(token)
             continue
 
         local_seen.add(token)
@@ -159,4 +182,5 @@ def prepare_review(source: str, run_id: str, base_dir: str = "data") -> ReviewPl
         excluded_known=_ordered_unique(excluded_known),
         excluded_particles=_ordered_unique(excluded_particles),
         excluded_seen=_ordered_unique(excluded_seen),
+        excluded_sfx=_ordered_unique(excluded_sfx),
     )

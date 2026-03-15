@@ -27,6 +27,7 @@ class ProjectDefaults:
     online_dict: str | None = None
     data_dir: str | None = None
     no_preprocess: bool | None = None
+    exclude_sfx: bool | None = None
     volume: str | None = None
     chapter: str | None = None
 
@@ -115,7 +116,7 @@ def set_config(key: str, value: str, data_dir: str = "data", source: str | None 
     current = get_config(data_dir, source)
 
     # Coerce booleans
-    if key == "no_preprocess":
+    if key in ("no_preprocess", "exclude_sfx"):
         current[key] = value.lower() in ("true", "1", "yes")
     else:
         current[key] = value

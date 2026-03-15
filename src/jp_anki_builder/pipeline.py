@@ -51,6 +51,7 @@ class Pipeline:
         run_id: str,
         exclude: list[str] | None = None,
         save_excluded_to_known: bool = False,
+        exclude_sfx: bool = True,
     ) -> dict:
         summary = run_review(
             source=source,
@@ -58,6 +59,7 @@ class Pipeline:
             base_dir=self.data_dir,
             exclude=exclude,
             save_excluded_to_known=save_excluded_to_known,
+            exclude_sfx=exclude_sfx,
         )
         return {
             "stage": "review",
@@ -68,6 +70,7 @@ class Pipeline:
             "excluded_known": summary.excluded_known,
             "excluded_particles": summary.excluded_particles,
             "excluded_seen": summary.excluded_seen,
+            "excluded_sfx": summary.excluded_sfx,
             "excluded_manual": summary.excluded_manual,
             "artifact_path": summary.review_artifact_path,
         }
@@ -112,6 +115,7 @@ class Pipeline:
         preprocess: bool = True,
         exclude: list[str] | None = None,
         save_excluded_to_known: bool = False,
+        exclude_sfx: bool = True,
         volume: str | None = None,
         chapter: str | None = None,
         online_dict: str = "off",
@@ -133,6 +137,7 @@ class Pipeline:
             run_id=run_id,
             exclude=exclude,
             save_excluded_to_known=save_excluded_to_known,
+            exclude_sfx=exclude_sfx,
         )
         build_result = self.build(
             source=source,

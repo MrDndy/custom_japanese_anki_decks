@@ -1,3 +1,27 @@
+from __future__ import annotations
+
+import re
+from collections.abc import Callable
+
+_KATAKANA_ONLY = re.compile(r"^[\u30A0-\u30FF]+$")
+
+
+def is_sfx_token(token: str, word_exists: Callable[[str], bool] | None = None) -> bool:
+    """Return True if *token* is likely a sound effect / onomatopoeia.
+
+    Rule 1: same katakana character repeated 2+ times (e.g. ドドド, ゴゴゴ).
+    Rule 2: pure katakana of 2–4 characters with no offline dictionary match
+             (only applied when *word_exists* is provided).
+    """
+    if not token or not _KATAKANA_ONLY.match(token):
+        return False
+    if len(token) >= 2 and len(set(token)) == 1:
+        return True
+    if 2 <= len(token) <= 4 and word_exists is not None and not word_exists(token):
+        return True
+    return False
+
+
 DEFAULT_PARTICLES = {
     "\u306f",
     "\u304c",

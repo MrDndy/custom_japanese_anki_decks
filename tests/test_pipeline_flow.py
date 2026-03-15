@@ -15,7 +15,7 @@ def test_run_executes_stages_in_order(monkeypatch):
     monkeypatch.setattr(
         p,
         "review",
-        lambda source, run_id, exclude=None, save_excluded_to_known=False: {
+        lambda source, run_id, exclude=None, save_excluded_to_known=False, exclude_sfx=True: {
             "stage": "review",
             "approved_count": 1,
         },
