@@ -3,12 +3,40 @@ from __future__ import annotations
 import os
 import re
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 class OcrError(RuntimeError):
     pass
+
+
+class OcrProvider(Protocol):
+    """Protocol satisfied by all OCR provider classes."""
+
+    def extract_text(self, image_path: Path) -> str:
+        ...
+
+
+@dataclass
+class DetectedRegion:
+    """A text region detected on a manga page (Phase 2)."""
+
+    bbox: tuple[int, int, int, int]  # (x1, y1, x2, y2)
+    confidence: float
+    mask: np.ndarray | None = None
+    region_type: str = "text"  # text | sfx | caption
+
+
+class RegionDetector(Protocol):
+    """Protocol for full-page manga region detectors (Phase 2)."""
+
+    def detect(self, page_image: np.ndarray) -> list[DetectedRegion]:
+        ...
 
 
 _MANGA_OCR_RUNTIME_CONFIGURED = False

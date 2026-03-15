@@ -1,5 +1,16 @@
+from pathlib import Path
+
 from jp_anki_builder import ocr as ocr_module
-from jp_anki_builder.ocr import OcrCandidate, TesseractOcrProvider, build_ocr_provider
+from jp_anki_builder.ocr import (
+    DetectedRegion,
+    MangaOcrProvider,
+    OcrCandidate,
+    OcrProvider,
+    RegionDetector,
+    SidecarOcrProvider,
+    TesseractOcrProvider,
+    build_ocr_provider,
+)
 
 
 def test_ocr_candidate_scoring_prefers_japanese_and_confidence():
@@ -42,3 +53,42 @@ def test_configure_manga_ocr_runtime_sets_default_env(monkeypatch):
     assert ocr_module.os.environ["TRANSFORMERS_VERBOSITY"] == "error"
     assert ocr_module.os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] == "1"
     assert ocr_module.os.environ["TOKENIZERS_PARALLELISM"] == "false"
+
+
+class TestOcrProviderProtocol:
+    def test_sidecar_provider_satisfies_protocol(self):
+        provider = SidecarOcrProvider()
+        # Protocol is structural: check the method signature exists and is callable
+        assert callable(provider.extract_text)
+        import inspect
+        sig = inspect.signature(provider.extract_text)
+        assert "image_path" in sig.parameters
+
+    def test_manga_ocr_provider_satisfies_protocol(self):
+        provider = MangaOcrProvider()
+        assert callable(provider.extract_text)
+
+    def test_tesseract_provider_satisfies_protocol(self):
+        provider = TesseractOcrProvider()
+        assert callable(provider.extract_text)
+
+    def test_build_ocr_provider_returns_sidecar(self):
+        provider = build_ocr_provider("sidecar")
+        assert isinstance(provider, SidecarOcrProvider)
+
+    def test_build_ocr_provider_returns_tesseract(self):
+        provider = build_ocr_provider("tesseract")
+        assert isinstance(provider, TesseractOcrProvider)
+
+
+class TestDetectedRegion:
+    def test_detected_region_defaults(self):
+        region = DetectedRegion(bbox=(0, 0, 100, 50), confidence=0.9)
+        assert region.region_type == "text"
+        assert region.mask is None
+        assert region.bbox == (0, 0, 100, 50)
+        assert region.confidence == 0.9
+
+    def test_detected_region_custom_type(self):
+        region = DetectedRegion(bbox=(10, 20, 30, 40), confidence=0.75, region_type="sfx")
+        assert region.region_type == "sfx"
