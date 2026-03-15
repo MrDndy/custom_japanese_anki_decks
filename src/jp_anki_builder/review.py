@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from jp_anki_builder.config import RunPaths
 from jp_anki_builder.filtering import DEFAULT_PARTICLES, filter_stray_furigana, is_sfx_token
@@ -21,6 +21,7 @@ class ReviewSummary:
     excluded_manual: list[str]
     excluded_sfx: list[str]
     excluded_furigana: list[str]
+    low_confidence_candidates: list[str]
 
 
 @dataclass
@@ -34,6 +35,7 @@ class ReviewPlan:
     excluded_seen: list[str]
     excluded_sfx: list[str]
     excluded_furigana: list[str]
+    confidence_meta: dict[str, dict] = field(default_factory=dict)
 
 
 def _ordered_unique(words: list[str]) -> list[str]:
@@ -102,11 +104,28 @@ def run_review(
     excluded_manual = set(exclude or [])
     approved = [word for word in deduped if word not in excluded_manual]
 
+    # Confidence metadata for approved words only.
+    approved_meta = {
+        word: plan.confidence_meta[word]
+        for word in approved
+        if word in plan.confidence_meta
+    }
+    low_confidence = [
+        word for word in approved
+        if word in approved_meta
+        and (
+            approved_meta[word]["confidence"] < 0.90
+            or approved_meta[word]["reason"] == "surface_fallback"
+        )
+    ]
+
     review_payload = {
         "source": source,
         "run_id": run_id,
         "initial_candidates": candidates,
         "approved_candidates": approved,
+        "approved_candidates_meta": approved_meta,
+        "low_confidence_candidates": low_confidence,
         "excluded_known": plan.excluded_known,
         "excluded_particles": plan.excluded_particles,
         "excluded_seen": plan.excluded_seen,
@@ -137,6 +156,7 @@ def run_review(
         excluded_seen=plan.excluded_seen,
         excluded_sfx=plan.excluded_sfx,
         excluded_furigana=plan.excluded_furigana,
+        low_confidence_candidates=low_confidence,
         excluded_manual=sorted(excluded_manual),
     )
 
@@ -155,6 +175,21 @@ def prepare_review(
 
     scan_payload = json.loads(paths.scan_artifact.read_text(encoding="utf-8-sig"))
     candidates = scan_payload.get("candidates", [])
+
+    # Build lemma → best {confidence, reason} from all normalized_candidates in scan records.
+    confidence_meta: dict[str, dict] = {}
+    for record in scan_payload.get("records", []):
+        for nc in record.get("normalized_candidates", []):
+            lemma = nc.get("lemma", "")
+            if not lemma:
+                continue
+            new_conf = float(nc.get("confidence", 0.0))
+            existing = confidence_meta.get(lemma)
+            if existing is None or new_conf > existing["confidence"]:
+                confidence_meta[lemma] = {
+                    "confidence": new_conf,
+                    "reason": nc.get("reason", ""),
+                }
     known_words = _load_words_file(paths.known_words)
     seen_words = _load_seen_words(paths.source_seen_words)
     local_seen: set[str] = set()
@@ -196,4 +231,5 @@ def prepare_review(
         excluded_seen=_ordered_unique(excluded_seen),
         excluded_sfx=_ordered_unique(excluded_sfx),
         excluded_furigana=_ordered_unique(furigana_excluded),
+        confidence_meta=confidence_meta,
     )

@@ -74,6 +74,7 @@ class Pipeline:
             "excluded_seen": summary.excluded_seen,
             "excluded_sfx": summary.excluded_sfx,
             "excluded_furigana": summary.excluded_furigana,
+            "low_confidence_candidates": summary.low_confidence_candidates,
             "excluded_manual": summary.excluded_manual,
             "artifact_path": summary.review_artifact_path,
         }
