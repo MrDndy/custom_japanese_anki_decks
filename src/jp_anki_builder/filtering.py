@@ -4,6 +4,8 @@ import re
 from collections.abc import Callable
 
 _KATAKANA_ONLY = re.compile(r"^[\u30A0-\u30FF]+$")
+_SINGLE_HIRAGANA = re.compile(r"^[\u3041-\u309F]$")
+_HAS_KANJI = re.compile(r"[\u4E00-\u9FFF\u3400-\u4DBF]")
 
 
 def is_sfx_token(token: str, word_exists: Callable[[str], bool] | None = None) -> bool:
@@ -69,6 +71,26 @@ DEFAULT_PARTICLES = {
     "\u30b1",
     "\u50cd\u308b",
 }
+
+
+def filter_stray_furigana(candidates: list[str]) -> tuple[list[str], list[str]]:
+    """Remove single-hiragana tokens that are adjacent to a kanji-containing token.
+
+    Returns (kept, excluded) where *excluded* are the likely stray furigana.
+    Multi-character hiragana words (する, いる, etc.) are never removed.
+    """
+    kept: list[str] = []
+    excluded: list[str] = []
+    n = len(candidates)
+    for i, token in enumerate(candidates):
+        if _SINGLE_HIRAGANA.match(token):
+            prev_has_kanji = i > 0 and bool(_HAS_KANJI.search(candidates[i - 1]))
+            next_has_kanji = i < n - 1 and bool(_HAS_KANJI.search(candidates[i + 1]))
+            if prev_has_kanji or next_has_kanji:
+                excluded.append(token)
+                continue
+        kept.append(token)
+    return kept, excluded
 
 
 def filter_tokens(tokens: list[str], known_words: set[str]) -> list[str]:

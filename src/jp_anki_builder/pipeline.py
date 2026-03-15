@@ -52,6 +52,7 @@ class Pipeline:
         exclude: list[str] | None = None,
         save_excluded_to_known: bool = False,
         exclude_sfx: bool = True,
+        exclude_stray_furigana: bool = True,
     ) -> dict:
         summary = run_review(
             source=source,
@@ -60,6 +61,7 @@ class Pipeline:
             exclude=exclude,
             save_excluded_to_known=save_excluded_to_known,
             exclude_sfx=exclude_sfx,
+            exclude_stray_furigana=exclude_stray_furigana,
         )
         return {
             "stage": "review",
@@ -71,6 +73,7 @@ class Pipeline:
             "excluded_particles": summary.excluded_particles,
             "excluded_seen": summary.excluded_seen,
             "excluded_sfx": summary.excluded_sfx,
+            "excluded_furigana": summary.excluded_furigana,
             "excluded_manual": summary.excluded_manual,
             "artifact_path": summary.review_artifact_path,
         }
@@ -116,6 +119,7 @@ class Pipeline:
         exclude: list[str] | None = None,
         save_excluded_to_known: bool = False,
         exclude_sfx: bool = True,
+        exclude_stray_furigana: bool = True,
         volume: str | None = None,
         chapter: str | None = None,
         online_dict: str = "off",
@@ -138,6 +142,7 @@ class Pipeline:
             exclude=exclude,
             save_excluded_to_known=save_excluded_to_known,
             exclude_sfx=exclude_sfx,
+            exclude_stray_furigana=exclude_stray_furigana,
         )
         build_result = self.build(
             source=source,

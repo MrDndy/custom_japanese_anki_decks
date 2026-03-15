@@ -209,5 +209,6 @@ __marimo__/
 # Local project runtime and tool state
 .claude/
 .tmp_pytest/
+.pytest_tmp/
 .venv312/
 data/

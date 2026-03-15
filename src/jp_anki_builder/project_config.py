@@ -28,6 +28,7 @@ class ProjectDefaults:
     data_dir: str | None = None
     no_preprocess: bool | None = None
     exclude_sfx: bool | None = None
+    exclude_stray_furigana: bool | None = None
     volume: str | None = None
     chapter: str | None = None
 
@@ -116,7 +117,7 @@ def set_config(key: str, value: str, data_dir: str = "data", source: str | None 
     current = get_config(data_dir, source)
 
     # Coerce booleans
-    if key in ("no_preprocess", "exclude_sfx"):
+    if key in ("no_preprocess", "exclude_sfx", "exclude_stray_furigana"):
         current[key] = value.lower() in ("true", "1", "yes")
     else:
         current[key] = value

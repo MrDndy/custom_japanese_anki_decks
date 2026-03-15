@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from jp_anki_builder.config import RunPaths
-from jp_anki_builder.filtering import DEFAULT_PARTICLES, is_sfx_token
+from jp_anki_builder.filtering import DEFAULT_PARTICLES, filter_stray_furigana, is_sfx_token
 
 
 @dataclass
@@ -20,6 +20,7 @@ class ReviewSummary:
     excluded_seen: list[str]
     excluded_manual: list[str]
     excluded_sfx: list[str]
+    excluded_furigana: list[str]
 
 
 @dataclass
@@ -32,6 +33,7 @@ class ReviewPlan:
     excluded_particles: list[str]
     excluded_seen: list[str]
     excluded_sfx: list[str]
+    excluded_furigana: list[str]
 
 
 def _ordered_unique(words: list[str]) -> list[str]:
@@ -81,6 +83,7 @@ def run_review(
     save_excluded_to_known: bool = False,
     review_plan: ReviewPlan | None = None,
     exclude_sfx: bool = True,
+    exclude_stray_furigana: bool = True,
     word_exists: Callable[[str], bool] | None = None,
 ) -> ReviewSummary:
     paths = RunPaths(base_dir=base_dir, source_id=source, run_id=run_id)
@@ -89,6 +92,7 @@ def run_review(
         run_id=run_id,
         base_dir=base_dir,
         exclude_sfx=exclude_sfx,
+        exclude_stray_furigana=exclude_stray_furigana,
         word_exists=word_exists,
     )
     candidates = plan.initial_candidates
@@ -107,6 +111,7 @@ def run_review(
         "excluded_particles": plan.excluded_particles,
         "excluded_seen": plan.excluded_seen,
         "excluded_sfx": plan.excluded_sfx,
+        "excluded_furigana": plan.excluded_furigana,
         "excluded_manual": sorted(excluded_manual),
     }
     paths.review_artifact.write_text(
@@ -131,6 +136,7 @@ def run_review(
         excluded_particles=plan.excluded_particles,
         excluded_seen=plan.excluded_seen,
         excluded_sfx=plan.excluded_sfx,
+        excluded_furigana=plan.excluded_furigana,
         excluded_manual=sorted(excluded_manual),
     )
 
@@ -140,6 +146,7 @@ def prepare_review(
     run_id: str,
     base_dir: str = "data",
     exclude_sfx: bool = True,
+    exclude_stray_furigana: bool = True,
     word_exists: Callable[[str], bool] | None = None,
 ) -> ReviewPlan:
     paths = RunPaths(base_dir=base_dir, source_id=source, run_id=run_id)
@@ -174,6 +181,11 @@ def prepare_review(
         local_seen.add(token)
         deduped.append(token)
 
+    # Furigana filter operates on the post-loop candidate list (needs adjacency context).
+    furigana_excluded: list[str] = []
+    if exclude_stray_furigana:
+        deduped, furigana_excluded = filter_stray_furigana(deduped)
+
     return ReviewPlan(
         source=source,
         run_id=run_id,
@@ -183,4 +195,5 @@ def prepare_review(
         excluded_particles=_ordered_unique(excluded_particles),
         excluded_seen=_ordered_unique(excluded_seen),
         excluded_sfx=_ordered_unique(excluded_sfx),
+        excluded_furigana=_ordered_unique(furigana_excluded),
     )

@@ -1,4 +1,4 @@
-from jp_anki_builder.filtering import filter_tokens, is_sfx_token
+from jp_anki_builder.filtering import filter_stray_furigana, filter_tokens, is_sfx_token
 
 
 def test_filter_tokens_excludes_particles_and_known_words():
@@ -172,3 +172,112 @@ class TestSfxFilterInReview:
         assert defaults.exclude_sfx is False
         defaults2 = ProjectDefaults(exclude_sfx=True)
         assert defaults2.exclude_sfx is True
+
+
+class TestFilterStrayFurigana:
+    def test_single_hiragana_adjacent_to_kanji_is_excluded(self):
+        # 「勇」「が」「者」→ が is adjacent to kanji on both sides
+        kept, excluded = filter_stray_furigana(["勇", "が", "者"])
+        assert "が" in excluded
+        assert "勇" in kept
+        assert "者" in kept
+
+    def test_single_hiragana_after_kanji_is_excluded(self):
+        # typical OCR furigana: 冒険 followed by stray ぼ
+        kept, excluded = filter_stray_furigana(["冒険", "ぼ", "勇者"])
+        assert "ぼ" in excluded
+
+    def test_single_hiragana_before_kanji_is_excluded(self):
+        kept, excluded = filter_stray_furigana(["ゆ", "勇者"])
+        assert "ゆ" in excluded
+
+    def test_multi_char_hiragana_not_excluded(self):
+        # する, いる, ある are real words
+        kept, excluded = filter_stray_furigana(["勇者", "する", "冒険"])
+        assert "する" in kept
+        assert excluded == []
+
+    def test_single_hiragana_not_adjacent_to_kanji_not_excluded(self):
+        # isolated single hiragana (no kanji neighbor) should pass through
+        kept, excluded = filter_stray_furigana(["テレビ", "が", "好き"])
+        # 「が」is between katakana and kanji — 好き has kanji
+        # so が IS adjacent to 好き (kanji) → should be excluded
+        assert "が" in excluded
+
+    def test_single_hiragana_between_non_kanji_tokens_not_excluded(self):
+        kept, excluded = filter_stray_furigana(["テレビ", "が", "ゲーム"])
+        # テレビ = katakana only, ゲーム = katakana only → no kanji neighbors
+        assert "が" in kept
+        assert excluded == []
+
+    def test_empty_list(self):
+        kept, excluded = filter_stray_furigana([])
+        assert kept == []
+        assert excluded == []
+
+    def test_furigana_filter_in_prepare_review(self):
+        import json
+        import shutil
+        import tempfile
+        from jp_anki_builder.review import prepare_review
+
+        tmp = tempfile.mkdtemp()
+        try:
+            from pathlib import Path
+            run_dir = Path(tmp) / "manga-a" / "run-fur"
+            run_dir.mkdir(parents=True)
+            # 「勇者」「ゆ」「冒険」— ゆ is adjacent to 勇者 (kanji)
+            (run_dir / "scan.json").write_text(
+                json.dumps({
+                    "source": "manga-a",
+                    "run_id": "run-fur",
+                    "candidates": ["勇者", "ゆ", "冒険"],
+                }, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            plan = prepare_review(
+                source="manga-a",
+                run_id="run-fur",
+                base_dir=tmp,
+                exclude_stray_furigana=True,
+            )
+
+            assert "ゆ" not in plan.filtered_candidates
+            assert "ゆ" in plan.excluded_furigana
+            assert "勇者" in plan.filtered_candidates
+            assert "冒険" in plan.filtered_candidates
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_furigana_passes_through_when_disabled(self):
+        import json
+        import shutil
+        import tempfile
+        from jp_anki_builder.review import prepare_review
+
+        tmp = tempfile.mkdtemp()
+        try:
+            from pathlib import Path
+            run_dir = Path(tmp) / "manga-a" / "run-fur2"
+            run_dir.mkdir(parents=True)
+            (run_dir / "scan.json").write_text(
+                json.dumps({
+                    "source": "manga-a",
+                    "run_id": "run-fur2",
+                    "candidates": ["勇者", "ゆ"],
+                }, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            plan = prepare_review(
+                source="manga-a",
+                run_id="run-fur2",
+                base_dir=tmp,
+                exclude_stray_furigana=False,
+            )
+
+            assert "ゆ" in plan.filtered_candidates
+            assert plan.excluded_furigana == []
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
