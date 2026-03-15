@@ -113,7 +113,7 @@ def _resolve_defaults(images: str, source: str | None, run_id: str | None,
 
 @app.command()
 def scan(
-    images: str = typer.Option(..., help="Image file or directory path."),
+    images: str = typer.Option(..., help="Image file, directory, or container file (CBZ, PDF, EPUB, CBR)."),
     source: str | None = typer.Option(None, help="Source id (auto-derived from path if omitted)."),
     run_id: str | None = typer.Option(None, help="Run id (auto-derived from path if omitted)."),
     data_dir: str = typer.Option("data", help="Data storage directory."),
@@ -307,7 +307,7 @@ def build(
 
 @app.command()
 def run(
-    images: str = typer.Option(..., help="Image file or directory path."),
+    images: str = typer.Option(..., help="Image file, directory, or container file (CBZ, PDF, EPUB, CBR)."),
     source: str | None = typer.Option(None, help="Source id (auto-derived from path if omitted)."),
     run_id: str | None = typer.Option(None, help="Run id (auto-derived from path if omitted)."),
     data_dir: str = typer.Option("data", help="Data storage directory."),
