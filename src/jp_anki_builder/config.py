@@ -39,3 +39,7 @@ class RunPaths:
     @property
     def word_cache(self) -> Path:
         return self.run_dir / "word_cache.json"
+
+    @property
+    def vocab_db(self) -> Path:
+        return Path(self.base_dir) / "vocabulary.db"

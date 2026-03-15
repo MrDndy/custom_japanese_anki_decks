@@ -10,6 +10,7 @@ from jp_anki_builder.cards import build_deck_name, build_note_fields
 from jp_anki_builder.config import RunPaths
 from jp_anki_builder.dictionary import WordExistsCache, build_offline_dictionary, build_online_dictionary
 from jp_anki_builder.enrich import enrich_word
+from jp_anki_builder.vocab_db import VocabDB
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +192,13 @@ def run_build(
     paths.run_dir.mkdir(parents=True, exist_ok=True)
     package = genanki.Package(deck)
     package.write_to_file(str(paths.deck_package))
+
+    # Record exported words in the central vocabulary database.
+    vocab_db = VocabDB(paths.vocab_db)
+    try:
+        vocab_db.record_exports(buildable, deck_name=deck_name, source=source)
+    finally:
+        vocab_db.close()
 
     build_payload = {
         "source": source,
