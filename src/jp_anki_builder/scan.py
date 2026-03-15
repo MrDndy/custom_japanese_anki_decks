@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from jp_anki_builder.config import RunPaths
 from jp_anki_builder.dictionary import WordExistsCache, build_offline_dictionary, build_online_dictionary
 from jp_anki_builder.normalization import get_default_normalizer
 from jp_anki_builder.ocr import build_ocr_provider
+from jp_anki_builder.region_detectors import build_region_detector
 from jp_anki_builder.tokenize import extract_token_sequence, is_candidate_token
 
 logger = logging.getLogger(__name__)
@@ -107,6 +109,53 @@ def _write_scan_artifact(paths: RunPaths, records: list[dict], source: str, run_
     )
 
 
+def _ocr_pil_image(provider, pil_image, tmp_dir: Path) -> list[str]:
+    """Save *pil_image* to a temp file in *tmp_dir* and run OCR on it."""
+    tmp_path = tmp_dir / "_ocr_tmp.png"
+    pil_image.save(str(tmp_path))
+    if hasattr(provider, "extract_text_candidates"):
+        return provider.extract_text_candidates(tmp_path, top_n=8)
+    return [provider.extract_text(tmp_path)]
+
+
+def _ocr_region_crops(provider, pil_image, regions, tmp_dir: Path) -> tuple[list[str], list[dict]]:
+    """Crop each detected region, OCR it, and return aggregated texts + region records."""
+    region_texts: list[str] = []
+    region_records: list[dict] = []
+    for j, region in enumerate(regions):
+        x1, y1, x2, y2 = region.bbox
+        crop = pil_image.crop((x1, y1, x2, y2))
+        crop_path = tmp_dir / f"crop_{j}.png"
+        crop.save(str(crop_path))
+        text = provider.extract_text(crop_path)
+        region_texts.append(text)
+        region_records.append({
+            "bbox": list(region.bbox),
+            "confidence": region.confidence,
+            "text": text,
+        })
+    return region_texts, region_records
+
+
+def _process_texts_to_candidates(texts: list[str], normalizer, word_exists) -> tuple[list[str], list[dict], list[str]]:
+    """Normalize texts and extract candidates. Returns (candidates, normalized_records, surface_tokens)."""
+    candidates: list[str] = []
+    normalized_records: list[dict] = []
+    primary_surface_tokens: list[str] = []
+    for candidate_text in texts:
+        sequence = extract_token_sequence(candidate_text)
+        if not primary_surface_tokens:
+            primary_surface_tokens = sequence
+        normalized = normalizer.normalize_text(candidate_text, word_exists=word_exists)
+        base = [entry.lemma for entry in normalized]
+        candidates.extend(base)
+        normalized_records.extend(asdict(entry) for entry in normalized)
+        surface_candidates = {token for token in sequence if is_candidate_token(token)}
+        candidates.extend(_merge_compound_candidates(sequence, surface_candidates, word_exists))
+    candidates = list(dict.fromkeys(candidates))
+    return candidates, normalized_records, primary_surface_tokens
+
+
 def run_scan(
     images: str,
     source: str,
@@ -119,11 +168,34 @@ def run_scan(
     online_dict: str = "off",
     resume: bool = False,
     save_debug_overlays: bool = False,
+    detector_mode: str = "none",
 ) -> ScanSummary:
     images_path = Path(images)
-    files = _collect_images(images_path)
-    if not files:
-        raise ValueError(f"No image files found at: {images}")
+
+    # Determine if the input is a container file (CBZ, PDF, EPUB, etc.)
+    _is_container = (
+        images_path.is_file()
+        and images_path.suffix.lower() not in IMAGE_EXTENSIONS
+    )
+
+    if _is_container:
+        from jp_anki_builder.format_handlers import extract_pages
+        page_results = extract_pages(images_path)
+        if not page_results:
+            raise ValueError(f"No pages found in: {images}")
+        total_count = len(page_results)
+        # Each item: (image_key, pil_image_or_None, preextracted_text_or_None)
+        page_items: list[tuple[str, object, str | None]] = [
+            (pr.source_file, pr.image, pr.text) for pr in page_results
+        ]
+        files_for_resume: list[str] = [pr.source_file for pr in page_results]
+    else:
+        files = _collect_images(images_path)
+        if not files:
+            raise ValueError(f"No image files found at: {images}")
+        total_count = len(files)
+        page_items = None  # path mode — existing behaviour
+        files_for_resume = [str(f) for f in files]
 
     paths = RunPaths(base_dir=base_dir, source_id=source, run_id=run_id)
     paths.run_dir.mkdir(parents=True, exist_ok=True)
@@ -153,54 +225,133 @@ def run_scan(
     normalizer = get_default_normalizer()
     normalization_method = getattr(normalizer, "method_name", "sudachi_nlp")
 
-    pending = [f for f in files if str(f) not in done_images]
-    logger.info("scanning %d image(s) (%d pending) with ocr=%s normalizer=%s",
-                len(files), len(pending), ocr_mode, normalization_method)
+    # Build the region detector (NullDetector when mode is "none")
+    detector = build_region_detector(detector_mode)
+    use_detector = detector_mode != "none"
 
-    for image_path in pending:
-        if hasattr(provider, "extract_text_candidates"):
-            texts = provider.extract_text_candidates(image_path, top_n=8)
-        else:
-            texts = [provider.extract_text(image_path)]
+    pending_count = sum(1 for k in files_for_resume if k not in done_images)
+    logger.info("scanning %d image(s) (%d pending) with ocr=%s normalizer=%s detector=%s",
+                total_count, pending_count, ocr_mode, normalization_method, detector_mode)
 
-        text = texts[0] if texts else ""
+    # -----------------------------------------------------------------------
+    # Path mode (existing behaviour, backward-compatible)
+    # -----------------------------------------------------------------------
+    if page_items is None:
+        pending = [f for f in files if str(f) not in done_images]
 
-        if save_debug_overlays:
-            _save_debug_overlay(image_path, text, paths.debug_dir)
+        for image_path in pending:
+            if use_detector:
+                # Region-aware processing
+                from PIL import Image as PILImage
+                import numpy as np
+                pil_img = PILImage.open(image_path).convert("RGB")
+                np_img = np.array(pil_img)
+                regions = detector.detect(np_img)
 
-        candidates: list[str] = []
-        normalized_records: list[dict] = []
-        primary_surface_tokens: list[str] = []
-        for candidate_text in texts:
-            sequence = extract_token_sequence(candidate_text)
-            if not primary_surface_tokens:
-                primary_surface_tokens = sequence
-            normalized = normalizer.normalize_text(candidate_text, word_exists=word_exists)
-            base = [entry.lemma for entry in normalized]
-            candidates.extend(base)
-            normalized_records.extend(asdict(entry) for entry in normalized)
-            surface_candidates = {token for token in sequence if is_candidate_token(token)}
-            candidates.extend(_merge_compound_candidates(sequence, surface_candidates, word_exists))
-        candidates = list(dict.fromkeys(candidates))
-        logger.debug("image %s: text=%r candidates=%s", image_path.name, text[:80], candidates)
-        records.append(
-            {
-                "image": str(image_path),
+                with tempfile.TemporaryDirectory() as tmp_raw:
+                    tmp_dir = Path(tmp_raw)
+                    region_texts, region_records = _ocr_region_crops(
+                        provider, pil_img, regions, tmp_dir
+                    )
+
+                text = " ".join(t for t in region_texts if t)
+                texts = [text] if text else [""]
+                candidates, normalized_records, surface_tokens = _process_texts_to_candidates(
+                    texts, normalizer, word_exists
+                )
+                logger.debug("image %s: %d region(s) detected candidates=%s",
+                             image_path.name, len(regions), candidates)
+                record = {
+                    "image": str(image_path),
+                    "text": text,
+                    "alternate_texts": [],
+                    "surface_tokens": surface_tokens,
+                    "normalized_candidates": normalized_records,
+                    "candidates": candidates,
+                    "regions": region_records,
+                }
+            else:
+                # Existing logic — UNCHANGED
+                if hasattr(provider, "extract_text_candidates"):
+                    texts = provider.extract_text_candidates(image_path, top_n=8)
+                else:
+                    texts = [provider.extract_text(image_path)]
+
+                text = texts[0] if texts else ""
+
+                if save_debug_overlays:
+                    _save_debug_overlay(image_path, text, paths.debug_dir)
+
+                candidates, normalized_records, surface_tokens = _process_texts_to_candidates(
+                    texts, normalizer, word_exists
+                )
+                logger.debug("image %s: text=%r candidates=%s", image_path.name, text[:80], candidates)
+                record = {
+                    "image": str(image_path),
+                    "text": text,
+                    "alternate_texts": texts[1:6],
+                    "surface_tokens": surface_tokens,
+                    "normalized_candidates": normalized_records,
+                    "candidates": candidates,
+                }
+
+            records.append(record)
+            _write_scan_artifact(paths, records, source, run_id, ocr_mode, ocr_language,
+                                 normalization_method, online_dict, total_count)
+
+    # -----------------------------------------------------------------------
+    # Container mode (CBZ, PDF, EPUB)
+    # -----------------------------------------------------------------------
+    else:
+        pending_items = [(key, img, txt) for key, img, txt in page_items if key not in done_images]
+
+        for image_key, pil_image, preextracted_text in pending_items:
+            with tempfile.TemporaryDirectory() as tmp_raw:
+                tmp_dir = Path(tmp_raw)
+
+                if preextracted_text is not None:
+                    # PDF text layer — skip OCR entirely
+                    texts = [preextracted_text]
+                    region_records_for_json: list[dict] = []
+                elif use_detector:
+                    # Region-aware OCR on container page image
+                    import numpy as np
+                    np_img = np.array(pil_image)
+                    regions = detector.detect(np_img)
+                    region_texts, region_records_for_json = _ocr_region_crops(
+                        provider, pil_image, regions, tmp_dir
+                    )
+                    combined = " ".join(t for t in region_texts if t)
+                    texts = [combined] if combined else [""]
+                else:
+                    # Plain OCR on the whole page image
+                    texts = _ocr_pil_image(provider, pil_image, tmp_dir)
+                    region_records_for_json = []
+
+            text = texts[0] if texts else ""
+            candidates, normalized_records, surface_tokens = _process_texts_to_candidates(
+                texts, normalizer, word_exists
+            )
+            logger.debug("page %s: text=%r candidates=%s", image_key, text[:80], candidates)
+
+            record: dict = {
+                "image": image_key,
                 "text": text,
                 "alternate_texts": texts[1:6],
-                "surface_tokens": primary_surface_tokens,
+                "surface_tokens": surface_tokens,
                 "normalized_candidates": normalized_records,
                 "candidates": candidates,
             }
-        )
+            if region_records_for_json:
+                record["regions"] = region_records_for_json
 
-        # Write incrementally after each image so partial progress is saved
-        _write_scan_artifact(paths, records, source, run_id, ocr_mode, ocr_language,
-                             normalization_method, online_dict, len(files))
+            records.append(record)
+            _write_scan_artifact(paths, records, source, run_id, ocr_mode, ocr_language,
+                                 normalization_method, online_dict, total_count)
 
-    # Final write (also covers the case where all images were already done)
+    # Final write (covers the case where all images were already done on resume)
     _write_scan_artifact(paths, records, source, run_id, ocr_mode, ocr_language,
-                         normalization_method, online_dict, len(files))
+                         normalization_method, online_dict, total_count)
     cache.save(paths.word_cache)
 
     all_candidates: list[str] = []
@@ -210,7 +361,7 @@ def run_scan(
 
     return ScanSummary(
         run_id=run_id,
-        image_count=len(files),
+        image_count=total_count,
         candidate_count=len(dedup_candidates),
         candidates=dedup_candidates,
         artifact_path=paths.scan_artifact,

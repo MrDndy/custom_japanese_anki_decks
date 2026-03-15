@@ -23,6 +23,7 @@ class Pipeline:
         online_dict: str = "off",
         resume: bool = False,
         save_debug_overlays: bool = False,
+        detector_mode: str = "none",
     ) -> dict:
         summary = run_scan(
             images=images,
@@ -36,6 +37,7 @@ class Pipeline:
             online_dict=online_dict,
             resume=resume,
             save_debug_overlays=save_debug_overlays,
+            detector_mode=detector_mode,
         )
         return {
             "stage": "scan",
@@ -128,6 +130,7 @@ class Pipeline:
         chapter: str | None = None,
         online_dict: str = "off",
         resume: bool = False,
+        detector_mode: str = "none",
     ) -> dict:
         scan_result = self.scan(
             images=images,

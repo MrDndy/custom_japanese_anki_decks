@@ -70,6 +70,7 @@ def _resolve_defaults(images: str, source: str | None, run_id: str | None,
                       exclude_sfx: bool | None = None,
                       exclude_stray_furigana: bool | None = None,
                       save_debug_overlays: bool | None = None,
+                      detector_mode: str | None = None,
                       ) -> dict:
     """Resolve CLI args with config-file defaults and path inference."""
     # Load config-file defaults (project-level, then source-level)
@@ -106,6 +107,7 @@ def _resolve_defaults(images: str, source: str | None, run_id: str | None,
         "exclude_sfx": exclude_sfx if exclude_sfx is not None else (cfg.exclude_sfx if cfg.exclude_sfx is not None else True),
         "exclude_stray_furigana": exclude_stray_furigana if exclude_stray_furigana is not None else (cfg.exclude_stray_furigana if cfg.exclude_stray_furigana is not None else True),
         "save_debug_overlays": save_debug_overlays if save_debug_overlays is not None else (cfg.save_debug_overlays or False),
+        "detector_mode": detector_mode or cfg.detector_mode or "none",
     }
 
 
@@ -137,12 +139,17 @@ def scan(
         "--save-debug-overlays/--no-save-debug-overlays",
         help="Save annotated debug images to <run_dir>/debug/ (default from config, else false).",
     ),
+    detector_mode: str | None = typer.Option(
+        None,
+        help="Region detector: none (screenshot mode) or paddleocr (full-page detection).",
+    ),
 ) -> None:
     """Scan screenshots and produce OCR/candidate artifacts."""
     d = _resolve_defaults(
         images=images, source=source, run_id=run_id, data_dir=data_dir,
         ocr_mode=ocr_mode, ocr_language=ocr_language, online_dict=online_dict,
         no_preprocess=no_preprocess, save_debug_overlays=save_debug_overlays,
+        detector_mode=detector_mode,
     )
     try:
         result = Pipeline(data_dir=data_dir).scan(
@@ -156,6 +163,7 @@ def scan(
             online_dict=d["online_dict"],
             resume=resume,
             save_debug_overlays=d["save_debug_overlays"],
+            detector_mode=d["detector_mode"],
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc), param_hint="--images") from exc
@@ -348,6 +356,10 @@ def run(
         "--save-debug-overlays/--no-save-debug-overlays",
         help="Save annotated debug images to <run_dir>/debug/ (default from config, else false).",
     ),
+    detector_mode: str | None = typer.Option(
+        None,
+        help="Region detector: none (screenshot mode) or paddleocr (full-page detection).",
+    ),
 ) -> None:
     """Run scan -> review -> build."""
     d = _resolve_defaults(
@@ -356,6 +368,7 @@ def run(
         no_preprocess=no_preprocess, volume=volume, chapter=chapter,
         exclude_sfx=exclude_sfx, exclude_stray_furigana=exclude_stray_furigana,
         save_debug_overlays=save_debug_overlays,
+        detector_mode=detector_mode,
     )
     pipeline = Pipeline(data_dir=data_dir)
     try:
@@ -370,6 +383,7 @@ def run(
             online_dict=d["online_dict"],
             resume=resume,
             save_debug_overlays=d["save_debug_overlays"],
+            detector_mode=d["detector_mode"],
         )
         _emit_stage_header("SCAN")
         typer.echo(
