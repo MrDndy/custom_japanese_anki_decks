@@ -19,8 +19,25 @@ logger = logging.getLogger(__name__)
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 
-def _save_debug_overlay(image_path: Path, ocr_text: str, debug_dir: Path) -> None:
-    """Save a copy of *image_path* with *ocr_text* drawn in the top-left corner.
+_REGION_TYPE_COLORS: dict[str, tuple[int, int, int]] = {
+    "text": (0, 220, 0),      # green
+    "sfx": (255, 140, 0),     # orange
+    "caption": (0, 180, 255), # cyan
+}
+_REGION_DEFAULT_COLOR = (255, 255, 0)  # yellow fallback
+
+
+def _save_debug_overlay(
+    image_path: Path,
+    ocr_text: str,
+    debug_dir: Path,
+    regions: list[dict] | None = None,
+) -> None:
+    """Save a copy of *image_path* annotated with OCR text and optional region boxes.
+
+    When *regions* is provided (non-empty list of region dicts from scan.json),
+    draws a colored bounding box and label for each region.  Falls back to
+    Phase 1 text-only annotation when *regions* is None or empty.
 
     Silently skips (with a warning) if Pillow is unavailable or any error occurs.
     """
@@ -35,12 +52,26 @@ def _save_debug_overlay(image_path: Path, ocr_text: str, debug_dir: Path) -> Non
         img = Image.open(image_path).convert("RGBA")
         draw = ImageDraw.Draw(img)
 
-        # White text with a thin black shadow for readability on any background.
-        label = ocr_text[:200] if ocr_text else "(no text)"
-        x, y = 4, 4
-        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-            draw.text((x + dx, y + dy), label, fill=(0, 0, 0, 220))
-        draw.text((x, y), label, fill=(255, 255, 255, 255))
+        if regions:
+            # Phase 2: draw bounding boxes + per-region labels
+            for i, region in enumerate(regions):
+                x1, y1, x2, y2 = region["bbox"]
+                region_type = region.get("region_type", "text")
+                color = _REGION_TYPE_COLORS.get(region_type, _REGION_DEFAULT_COLOR)
+                draw.rectangle([(x1, y1), (x2, y2)], outline=color, width=2)
+                conf = region.get("confidence", 0.0)
+                label = f"[{i}] {region_type} {conf:.2f}"
+                # Shadow then label text
+                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    draw.text((x1 + dx, y1 - 14 + dy), label, fill=(0, 0, 0, 220))
+                draw.text((x1, y1 - 14), label, fill=color)
+        else:
+            # Phase 1: OCR text annotation only
+            label = ocr_text[:200] if ocr_text else "(no text)"
+            x, y = 4, 4
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                draw.text((x + dx, y + dy), label, fill=(0, 0, 0, 220))
+            draw.text((x, y), label, fill=(255, 255, 255, 255))
 
         out_path = debug_dir / image_path.name
         img.convert("RGB").save(str(out_path))
@@ -259,6 +290,9 @@ def run_scan(
                 candidates, normalized_records, surface_tokens = _process_texts_to_candidates(
                     texts, normalizer, word_exists
                 )
+                if save_debug_overlays:
+                    _save_debug_overlay(image_path, text, paths.debug_dir,
+                                        regions=region_records)
                 logger.debug("image %s: %d region(s) detected candidates=%s",
                              image_path.name, len(regions), candidates)
                 record = {
