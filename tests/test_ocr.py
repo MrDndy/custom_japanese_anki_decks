@@ -81,6 +81,31 @@ class TestOcrProviderProtocol:
         assert isinstance(provider, TesseractOcrProvider)
 
 
+class TestRegionDetectorProtocol:
+    def test_region_detector_protocol_importable(self):
+        from jp_anki_builder.ocr import RegionDetector
+        import inspect
+        assert inspect.isclass(RegionDetector)
+
+    def test_region_detector_protocol_has_detect_method(self):
+        from jp_anki_builder.ocr import RegionDetector
+        import inspect
+        # Protocol defines detect(page_image: np.ndarray) -> list[DetectedRegion]
+        assert "detect" in {name for name, _ in inspect.getmembers(RegionDetector)}
+
+    def test_concrete_class_satisfying_region_detector(self):
+        from jp_anki_builder.ocr import DetectedRegion
+        # A class with detect() structurally satisfies the Protocol
+        class FakeDetector:
+            def detect(self, page_image):
+                return [DetectedRegion(bbox=(0, 0, 10, 10), confidence=0.9)]
+
+        d = FakeDetector()
+        result = d.detect(None)
+        assert len(result) == 1
+        assert isinstance(result[0], DetectedRegion)
+
+
 class TestDetectedRegion:
     def test_detected_region_defaults(self):
         region = DetectedRegion(bbox=(0, 0, 100, 50), confidence=0.9)
