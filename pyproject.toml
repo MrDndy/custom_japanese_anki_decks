@@ -32,6 +32,10 @@ pdf = [
   "pdfplumber>=0.10.0",
   "pypdfium2>=4.0.0",
 ]
+paddle = [
+  "paddlepaddle>=2.6.0",
+  "paddleocr>=2.7.0",
+]
 cbr = [
   "rarfile>=4.0",
 ]

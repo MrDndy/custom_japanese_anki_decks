@@ -32,6 +32,7 @@ class ProjectDefaults:
     save_debug_overlays: bool | None = None
     volume: str | None = None
     chapter: str | None = None
+    detector_mode: str | None = None
 
     def merge(self, other: ProjectDefaults) -> ProjectDefaults:
         """Return a new ProjectDefaults with non-None values from *other* taking precedence."""
