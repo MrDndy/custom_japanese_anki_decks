@@ -43,3 +43,7 @@ class RunPaths:
     @property
     def vocab_db(self) -> Path:
         return Path(self.base_dir) / "vocabulary.db"
+
+    @property
+    def debug_dir(self) -> Path:
+        return self.run_dir / "debug"

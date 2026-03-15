@@ -17,6 +17,36 @@ logger = logging.getLogger(__name__)
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 
+def _save_debug_overlay(image_path: Path, ocr_text: str, debug_dir: Path) -> None:
+    """Save a copy of *image_path* with *ocr_text* drawn in the top-left corner.
+
+    Silently skips (with a warning) if Pillow is unavailable or any error occurs.
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        logger.warning("debug overlays require Pillow; skipping (pip install Pillow)")
+        return
+
+    try:
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        img = Image.open(image_path).convert("RGBA")
+        draw = ImageDraw.Draw(img)
+
+        # White text with a thin black shadow for readability on any background.
+        label = ocr_text[:200] if ocr_text else "(no text)"
+        x, y = 4, 4
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            draw.text((x + dx, y + dy), label, fill=(0, 0, 0, 220))
+        draw.text((x, y), label, fill=(255, 255, 255, 255))
+
+        out_path = debug_dir / image_path.name
+        img.convert("RGB").save(str(out_path))
+        logger.debug("saved debug overlay: %s", out_path)
+    except Exception as exc:
+        logger.warning("could not save debug overlay for %s: %s", image_path.name, exc)
+
+
 @dataclass
 class ScanSummary:
     run_id: str
@@ -88,6 +118,7 @@ def run_scan(
     preprocess: bool = True,
     online_dict: str = "off",
     resume: bool = False,
+    save_debug_overlays: bool = False,
 ) -> ScanSummary:
     images_path = Path(images)
     files = _collect_images(images_path)
@@ -133,6 +164,10 @@ def run_scan(
             texts = [provider.extract_text(image_path)]
 
         text = texts[0] if texts else ""
+
+        if save_debug_overlays:
+            _save_debug_overlay(image_path, text, paths.debug_dir)
+
         candidates: list[str] = []
         normalized_records: list[dict] = []
         primary_surface_tokens: list[str] = []

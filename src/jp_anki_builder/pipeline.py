@@ -22,6 +22,7 @@ class Pipeline:
         preprocess: bool = True,
         online_dict: str = "off",
         resume: bool = False,
+        save_debug_overlays: bool = False,
     ) -> dict:
         summary = run_scan(
             images=images,
@@ -34,6 +35,7 @@ class Pipeline:
             preprocess=preprocess,
             online_dict=online_dict,
             resume=resume,
+            save_debug_overlays=save_debug_overlays,
         )
         return {
             "stage": "scan",
@@ -121,6 +123,7 @@ class Pipeline:
         save_excluded_to_known: bool = False,
         exclude_sfx: bool = True,
         exclude_stray_furigana: bool = True,
+        save_debug_overlays: bool = False,
         volume: str | None = None,
         chapter: str | None = None,
         online_dict: str = "off",
@@ -136,6 +139,7 @@ class Pipeline:
             preprocess=preprocess,
             online_dict=online_dict,
             resume=resume,
+            save_debug_overlays=save_debug_overlays,
         )
         review_result = self.review(
             source=source,
