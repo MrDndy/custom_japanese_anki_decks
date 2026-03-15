@@ -12,6 +12,7 @@ dependencies = [
   "genanki>=0.13",
   "pytesseract>=0.3.10",
   "Pillow>=10.0.0",
+  "natsort>=8.0.0",
 ]
 
 [project.scripts]
@@ -26,6 +27,17 @@ japanese_nlp = [
 ]
 manga_ocr = [
   "manga-ocr>=0.1.14",
+]
+pdf = [
+  "pdfplumber>=0.10.0",
+  "pypdfium2>=4.0.0",
+]
+cbr = [
+  "rarfile>=4.0",
+]
+epub = [
+  "ebooklib>=0.18",
+  "beautifulsoup4>=4.12.0",
 ]
 recommended = [
   "fugashi>=1.3.0",
