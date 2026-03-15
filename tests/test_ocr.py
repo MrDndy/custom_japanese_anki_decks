@@ -58,19 +58,15 @@ def test_configure_manga_ocr_runtime_sets_default_env(monkeypatch):
 class TestOcrProviderProtocol:
     def test_sidecar_provider_satisfies_protocol(self):
         provider = SidecarOcrProvider()
-        # Protocol is structural: check the method signature exists and is callable
-        assert callable(provider.extract_text)
-        import inspect
-        sig = inspect.signature(provider.extract_text)
-        assert "image_path" in sig.parameters
+        assert isinstance(provider, OcrProvider)
 
     def test_manga_ocr_provider_satisfies_protocol(self):
         provider = MangaOcrProvider()
-        assert callable(provider.extract_text)
+        assert isinstance(provider, OcrProvider)
 
     def test_tesseract_provider_satisfies_protocol(self):
         provider = TesseractOcrProvider()
-        assert callable(provider.extract_text)
+        assert isinstance(provider, OcrProvider)
 
     def test_build_ocr_provider_returns_sidecar(self):
         provider = build_ocr_provider("sidecar")

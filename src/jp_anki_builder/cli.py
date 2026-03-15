@@ -67,6 +67,9 @@ def _resolve_defaults(images: str, source: str | None, run_id: str | None,
                       data_dir: str, ocr_mode: str | None, ocr_language: str | None,
                       online_dict: str | None, no_preprocess: bool | None,
                       volume: str | None = None, chapter: str | None = None,
+                      exclude_sfx: bool | None = None,
+                      exclude_stray_furigana: bool | None = None,
+                      save_debug_overlays: bool | None = None,
                       ) -> dict:
     """Resolve CLI args with config-file defaults and path inference."""
     # Load config-file defaults (project-level, then source-level)
@@ -100,6 +103,9 @@ def _resolve_defaults(images: str, source: str | None, run_id: str | None,
         "no_preprocess": no_preprocess if no_preprocess is not None else (cfg.no_preprocess or False),
         "volume": volume or cfg.volume,
         "chapter": chapter or cfg.chapter,
+        "exclude_sfx": exclude_sfx if exclude_sfx is not None else (cfg.exclude_sfx if cfg.exclude_sfx is not None else True),
+        "exclude_stray_furigana": exclude_stray_furigana if exclude_stray_furigana is not None else (cfg.exclude_stray_furigana if cfg.exclude_stray_furigana is not None else True),
+        "save_debug_overlays": save_debug_overlays if save_debug_overlays is not None else (cfg.save_debug_overlays or False),
     }
 
 
@@ -126,12 +132,17 @@ def scan(
         "--resume",
         help="Resume a previously interrupted scan, skipping already-processed images.",
     ),
+    save_debug_overlays: bool | None = typer.Option(
+        None,
+        "--save-debug-overlays/--no-save-debug-overlays",
+        help="Save annotated debug images to <run_dir>/debug/ (default from config, else false).",
+    ),
 ) -> None:
     """Scan screenshots and produce OCR/candidate artifacts."""
     d = _resolve_defaults(
         images=images, source=source, run_id=run_id, data_dir=data_dir,
         ocr_mode=ocr_mode, ocr_language=ocr_language, online_dict=online_dict,
-        no_preprocess=no_preprocess,
+        no_preprocess=no_preprocess, save_debug_overlays=save_debug_overlays,
     )
     try:
         result = Pipeline(data_dir=data_dir).scan(
@@ -144,6 +155,7 @@ def scan(
             preprocess=not d["no_preprocess"],
             online_dict=d["online_dict"],
             resume=resume,
+            save_debug_overlays=d["save_debug_overlays"],
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc), param_hint="--images") from exc
@@ -175,12 +187,32 @@ def review(
         "--save-excluded-to-known",
         help="Append manually excluded words to data/<source>/known_words.txt.",
     ),
+    exclude_sfx: bool | None = typer.Option(
+        None,
+        "--exclude-sfx/--no-exclude-sfx",
+        help="Filter likely sound effects (default from config, else true).",
+    ),
+    exclude_stray_furigana: bool | None = typer.Option(
+        None,
+        "--exclude-stray-furigana/--no-exclude-stray-furigana",
+        help="Filter stray single-hiragana furigana tokens (default from config, else true).",
+    ),
 ) -> None:
     """Review and approve candidate words."""
+    cfg = load_project_config(data_dir=data_dir, source=source)
+    resolved_exclude_sfx = exclude_sfx if exclude_sfx is not None else (cfg.exclude_sfx if cfg.exclude_sfx is not None else True)
+    resolved_exclude_furigana = exclude_stray_furigana if exclude_stray_furigana is not None else (cfg.exclude_stray_furigana if cfg.exclude_stray_furigana is not None else True)
+
     manual_excludes = set(exclude or [])
 
     if interactive:
-        plan = prepare_review(source=source, run_id=run_id, base_dir=data_dir)
+        plan = prepare_review(
+            source=source,
+            run_id=run_id,
+            base_dir=data_dir,
+            exclude_sfx=resolved_exclude_sfx,
+            exclude_stray_furigana=resolved_exclude_furigana,
+        )
         typer.echo("Filtered candidates:")
         for idx, word in enumerate(plan.filtered_candidates, start=1):
             typer.echo(f"{idx}. {word}")
@@ -210,6 +242,8 @@ def review(
         run_id=run_id,
         exclude=sorted(manual_excludes),
         save_excluded_to_known=save_excluded_to_known,
+        exclude_sfx=resolved_exclude_sfx,
+        exclude_stray_furigana=resolved_exclude_furigana,
     )
     _emit_stage_header("REVIEW")
     typer.echo(
@@ -219,6 +253,9 @@ def review(
     _emit_reason_bucket("Particle", result.get("excluded_particles", []))
     _emit_reason_bucket("Already seen", result.get("excluded_seen", []))
     _emit_reason_bucket("Manual exclude", result.get("excluded_manual", []))
+    _emit_reason_bucket("SFX", result.get("excluded_sfx", []))
+    _emit_reason_bucket("Furigana", result.get("excluded_furigana", []))
+    _emit_reason_bucket("Low confidence", result.get("low_confidence_candidates", []))
     typer.echo(f"[INFO] Saved review results to: {result['artifact_path']}")
 
 
@@ -296,12 +333,29 @@ def run(
         "--dry-run",
         help="Preview what would happen without writing artifacts or generating a deck.",
     ),
+    exclude_sfx: bool | None = typer.Option(
+        None,
+        "--exclude-sfx/--no-exclude-sfx",
+        help="Filter likely sound effects (default from config, else true).",
+    ),
+    exclude_stray_furigana: bool | None = typer.Option(
+        None,
+        "--exclude-stray-furigana/--no-exclude-stray-furigana",
+        help="Filter stray single-hiragana furigana tokens (default from config, else true).",
+    ),
+    save_debug_overlays: bool | None = typer.Option(
+        None,
+        "--save-debug-overlays/--no-save-debug-overlays",
+        help="Save annotated debug images to <run_dir>/debug/ (default from config, else false).",
+    ),
 ) -> None:
     """Run scan -> review -> build."""
     d = _resolve_defaults(
         images=images, source=source, run_id=run_id, data_dir=data_dir,
         ocr_mode=ocr_mode, ocr_language=ocr_language, online_dict=online_dict,
         no_preprocess=no_preprocess, volume=volume, chapter=chapter,
+        exclude_sfx=exclude_sfx, exclude_stray_furigana=exclude_stray_furigana,
+        save_debug_overlays=save_debug_overlays,
     )
     pipeline = Pipeline(data_dir=data_dir)
     try:
@@ -315,6 +369,7 @@ def run(
             preprocess=not d["no_preprocess"],
             online_dict=d["online_dict"],
             resume=resume,
+            save_debug_overlays=d["save_debug_overlays"],
         )
         _emit_stage_header("SCAN")
         typer.echo(
@@ -330,7 +385,13 @@ def run(
             # In dry-run mode, compute the review plan without writing artifacts
             from jp_anki_builder.review import prepare_review as _prepare_review
 
-            plan = _prepare_review(source=d["source"], run_id=d["run_id"], base_dir=data_dir)
+            plan = _prepare_review(
+                source=d["source"],
+                run_id=d["run_id"],
+                base_dir=data_dir,
+                exclude_sfx=d["exclude_sfx"],
+                exclude_stray_furigana=d["exclude_stray_furigana"],
+            )
             _emit_stage_header("REVIEW (dry-run)")
             typer.echo(
                 f"[OK] Would approve {len(plan.filtered_candidates)} of "
@@ -339,6 +400,8 @@ def run(
             _emit_reason_bucket("Known", plan.excluded_known)
             _emit_reason_bucket("Particle", plan.excluded_particles)
             _emit_reason_bucket("Already seen", plan.excluded_seen)
+            _emit_reason_bucket("SFX", plan.excluded_sfx)
+            _emit_reason_bucket("Furigana", plan.excluded_furigana)
             if plan.filtered_candidates:
                 typer.echo(f"[INFO] Approved preview: {_format_word_preview(plan.filtered_candidates)}")
 
@@ -352,6 +415,8 @@ def run(
             run_id=d["run_id"],
             exclude=exclude,
             save_excluded_to_known=save_excluded_to_known,
+            exclude_sfx=d["exclude_sfx"],
+            exclude_stray_furigana=d["exclude_stray_furigana"],
         )
         _emit_stage_header("REVIEW")
         typer.echo(
@@ -361,6 +426,9 @@ def run(
         _emit_reason_bucket("Particle", review_result.get("excluded_particles", []))
         _emit_reason_bucket("Already seen", review_result.get("excluded_seen", []))
         _emit_reason_bucket("Manual exclude", review_result.get("excluded_manual", []))
+        _emit_reason_bucket("SFX", review_result.get("excluded_sfx", []))
+        _emit_reason_bucket("Furigana", review_result.get("excluded_furigana", []))
+        _emit_reason_bucket("Low confidence", review_result.get("low_confidence_candidates", []))
         if review_result["approved_count"] == 0:
             typer.echo("[WARN] No approved words remain after review.")
             raise typer.Exit(code=1)

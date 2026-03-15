@@ -194,11 +194,8 @@ def run_build(
     package.write_to_file(str(paths.deck_package))
 
     # Record exported words in the central vocabulary database.
-    vocab_db = VocabDB(paths.vocab_db)
-    try:
+    with VocabDB(paths.vocab_db) as vocab_db:
         vocab_db.record_exports(buildable, deck_name=deck_name, source=source)
-    finally:
-        vocab_db.close()
 
     build_payload = {
         "source": source,

@@ -1,3 +1,4 @@
+"""Central SQLite vocabulary database for cross-source dedup tracking."""
 from __future__ import annotations
 
 import logging
@@ -83,6 +84,12 @@ class VocabDB:
         self._conn.commit()
         logger.debug("recorded %d word(s) to vocab db (deck=%s)", count, deck_name)
         return count
+
+    def __enter__(self) -> VocabDB:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     def close(self) -> None:
         self._conn.close()

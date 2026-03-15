@@ -1,4 +1,7 @@
-﻿def exclude_seen(candidates: list[str], seen: set[str]) -> list[str]:
+﻿from __future__ import annotations
+
+
+def exclude_seen(candidates: list[str], seen: set[str]) -> list[str]:
     kept: list[str] = []
     local_seen: set[str] = set()
 

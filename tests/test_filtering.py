@@ -1,4 +1,8 @@
+import json
+from pathlib import Path
+
 from jp_anki_builder.filtering import filter_stray_furigana, filter_tokens, is_sfx_token
+from jp_anki_builder.review import prepare_review
 
 
 def test_filter_tokens_excludes_particles_and_known_words():
@@ -98,73 +102,53 @@ class TestIsSfxToken:
 
 
 class TestSfxFilterInReview:
-    def test_sfx_excluded_in_prepare_review(self):
-        import json
-        import shutil
-        import tempfile
-        from jp_anki_builder.review import prepare_review
+    def test_sfx_excluded_in_prepare_review(self, tmp_path: Path):
+        run_dir = tmp_path / "manga-a" / "run-1"
+        run_dir.mkdir(parents=True)
+        (run_dir / "scan.json").write_text(
+            json.dumps({
+                "source": "manga-a",
+                "run_id": "run-1",
+                "candidates": ["勇者", "ドドド", "ゴゴゴ", "冒険"],
+            }, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
-        tmp = tempfile.mkdtemp()
-        try:
-            from pathlib import Path
-            run_dir = Path(tmp) / "manga-a" / "run-1"
-            run_dir.mkdir(parents=True)
-            (run_dir / "scan.json").write_text(
-                json.dumps({
-                    "source": "manga-a",
-                    "run_id": "run-1",
-                    "candidates": ["勇者", "ドドド", "ゴゴゴ", "冒険"],
-                }, ensure_ascii=False),
-                encoding="utf-8",
-            )
+        plan = prepare_review(
+            source="manga-a",
+            run_id="run-1",
+            base_dir=str(tmp_path),
+            exclude_sfx=True,
+        )
 
-            plan = prepare_review(
-                source="manga-a",
-                run_id="run-1",
-                base_dir=tmp,
-                exclude_sfx=True,
-            )
+        assert "ドドド" not in plan.filtered_candidates
+        assert "ゴゴゴ" not in plan.filtered_candidates
+        assert "ドドド" in plan.excluded_sfx
+        assert "ゴゴゴ" in plan.excluded_sfx
+        assert "勇者" in plan.filtered_candidates
+        assert "冒険" in plan.filtered_candidates
 
-            assert "ドドド" not in plan.filtered_candidates
-            assert "ゴゴゴ" not in plan.filtered_candidates
-            assert "ドドド" in plan.excluded_sfx
-            assert "ゴゴゴ" in plan.excluded_sfx
-            assert "勇者" in plan.filtered_candidates
-            assert "冒険" in plan.filtered_candidates
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+    def test_sfx_passes_through_when_disabled(self, tmp_path: Path):
+        run_dir = tmp_path / "manga-a" / "run-2"
+        run_dir.mkdir(parents=True)
+        (run_dir / "scan.json").write_text(
+            json.dumps({
+                "source": "manga-a",
+                "run_id": "run-2",
+                "candidates": ["ドドド", "勇者"],
+            }, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
-    def test_sfx_passes_through_when_disabled(self):
-        import json
-        import shutil
-        import tempfile
-        from jp_anki_builder.review import prepare_review
+        plan = prepare_review(
+            source="manga-a",
+            run_id="run-2",
+            base_dir=str(tmp_path),
+            exclude_sfx=False,
+        )
 
-        tmp = tempfile.mkdtemp()
-        try:
-            from pathlib import Path
-            run_dir = Path(tmp) / "manga-a" / "run-2"
-            run_dir.mkdir(parents=True)
-            (run_dir / "scan.json").write_text(
-                json.dumps({
-                    "source": "manga-a",
-                    "run_id": "run-2",
-                    "candidates": ["ドドド", "勇者"],
-                }, ensure_ascii=False),
-                encoding="utf-8",
-            )
-
-            plan = prepare_review(
-                source="manga-a",
-                run_id="run-2",
-                base_dir=tmp,
-                exclude_sfx=False,
-            )
-
-            assert "ドドド" in plan.filtered_candidates
-            assert plan.excluded_sfx == []
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+        assert "ドドド" in plan.filtered_candidates
+        assert plan.excluded_sfx == []
 
     def test_config_exclude_sfx_key_recognized(self):
         from jp_anki_builder.project_config import ProjectDefaults
@@ -215,69 +199,49 @@ class TestFilterStrayFurigana:
         assert kept == []
         assert excluded == []
 
-    def test_furigana_filter_in_prepare_review(self):
-        import json
-        import shutil
-        import tempfile
-        from jp_anki_builder.review import prepare_review
+    def test_furigana_filter_in_prepare_review(self, tmp_path: Path):
+        run_dir = tmp_path / "manga-a" / "run-fur"
+        run_dir.mkdir(parents=True)
+        # 「勇者」「ゆ」「冒険」— ゆ is adjacent to 勇者 (kanji)
+        (run_dir / "scan.json").write_text(
+            json.dumps({
+                "source": "manga-a",
+                "run_id": "run-fur",
+                "candidates": ["勇者", "ゆ", "冒険"],
+            }, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
-        tmp = tempfile.mkdtemp()
-        try:
-            from pathlib import Path
-            run_dir = Path(tmp) / "manga-a" / "run-fur"
-            run_dir.mkdir(parents=True)
-            # 「勇者」「ゆ」「冒険」— ゆ is adjacent to 勇者 (kanji)
-            (run_dir / "scan.json").write_text(
-                json.dumps({
-                    "source": "manga-a",
-                    "run_id": "run-fur",
-                    "candidates": ["勇者", "ゆ", "冒険"],
-                }, ensure_ascii=False),
-                encoding="utf-8",
-            )
+        plan = prepare_review(
+            source="manga-a",
+            run_id="run-fur",
+            base_dir=str(tmp_path),
+            exclude_stray_furigana=True,
+        )
 
-            plan = prepare_review(
-                source="manga-a",
-                run_id="run-fur",
-                base_dir=tmp,
-                exclude_stray_furigana=True,
-            )
+        assert "ゆ" not in plan.filtered_candidates
+        assert "ゆ" in plan.excluded_furigana
+        assert "勇者" in plan.filtered_candidates
+        assert "冒険" in plan.filtered_candidates
 
-            assert "ゆ" not in plan.filtered_candidates
-            assert "ゆ" in plan.excluded_furigana
-            assert "勇者" in plan.filtered_candidates
-            assert "冒険" in plan.filtered_candidates
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+    def test_furigana_passes_through_when_disabled(self, tmp_path: Path):
+        run_dir = tmp_path / "manga-a" / "run-fur2"
+        run_dir.mkdir(parents=True)
+        (run_dir / "scan.json").write_text(
+            json.dumps({
+                "source": "manga-a",
+                "run_id": "run-fur2",
+                "candidates": ["勇者", "ゆ"],
+            }, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
-    def test_furigana_passes_through_when_disabled(self):
-        import json
-        import shutil
-        import tempfile
-        from jp_anki_builder.review import prepare_review
+        plan = prepare_review(
+            source="manga-a",
+            run_id="run-fur2",
+            base_dir=str(tmp_path),
+            exclude_stray_furigana=False,
+        )
 
-        tmp = tempfile.mkdtemp()
-        try:
-            from pathlib import Path
-            run_dir = Path(tmp) / "manga-a" / "run-fur2"
-            run_dir.mkdir(parents=True)
-            (run_dir / "scan.json").write_text(
-                json.dumps({
-                    "source": "manga-a",
-                    "run_id": "run-fur2",
-                    "candidates": ["勇者", "ゆ"],
-                }, ensure_ascii=False),
-                encoding="utf-8",
-            )
-
-            plan = prepare_review(
-                source="manga-a",
-                run_id="run-fur2",
-                base_dir=tmp,
-                exclude_stray_furigana=False,
-            )
-
-            assert "ゆ" in plan.filtered_candidates
-            assert plan.excluded_furigana == []
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+        assert "ゆ" in plan.filtered_candidates
+        assert plan.excluded_furigana == []

@@ -1,6 +1,16 @@
 from __future__ import annotations
 
+import pytest
+
 from jp_anki_builder import tokenize
+
+try:
+    import fugashi  # noqa: F401
+    _fugashi_available = True
+except (ImportError, ModuleNotFoundError):
+    _fugashi_available = False
+
+requires_fugashi = pytest.mark.skipif(not _fugashi_available, reason="requires fugashi")
 
 
 def test_extract_candidates_uses_word_tokenizer_when_available(monkeypatch):
@@ -94,6 +104,7 @@ def test_is_negative_aux_pair_detects_verb_plus_zu():
     right = _Word("ず", _Feature(pos1="助動詞"))
     assert tokenize._is_negative_aux_pair(left, right) is True
 
+@requires_fugashi
 def test_extract_candidates_normalizes_mizen_plus_aux_chain_to_dictionary_form():
     assert tokenize.extract_candidates("\u596a\u308f\u308c\u308b") == ["\u596a\u3046"]
 
@@ -104,9 +115,11 @@ def test_extract_candidate_sequence_keeps_negative_lexicalized_compound():
     )
 
 
+@requires_fugashi
 def test_extract_candidates_normalizes_causative_passive_to_root_dictionary_form():
     assert tokenize.extract_candidates("\u6b69\u304b\u3055\u308c\u308b") == ["\u6b69\u304f"]
 
 
+@requires_fugashi
 def test_extract_candidates_normalizes_another_causative_passive_to_root():
     assert tokenize.extract_candidates("\u8aad\u307e\u3055\u308c\u308b") == ["\u8aad\u3080"]

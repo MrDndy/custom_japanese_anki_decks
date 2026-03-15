@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 def build_deck_name(source: str, volume: str | None, chapter: str | None) -> str:
     parts = [source]
     if volume:

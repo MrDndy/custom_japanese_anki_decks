@@ -1,3 +1,4 @@
+"""Candidate filtering: particles, stop words, SFX detection, and furigana noise removal."""
 from __future__ import annotations
 
 import re

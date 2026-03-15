@@ -5,7 +5,7 @@ import re
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     import numpy as np
@@ -15,6 +15,7 @@ class OcrError(RuntimeError):
     pass
 
 
+@runtime_checkable
 class OcrProvider(Protocol):
     """Protocol satisfied by all OCR provider classes."""
 
@@ -32,6 +33,7 @@ class DetectedRegion:
     region_type: str = "text"  # text | sfx | caption
 
 
+@runtime_checkable
 class RegionDetector(Protocol):
     """Protocol for full-page manga region detectors (Phase 2)."""
 
