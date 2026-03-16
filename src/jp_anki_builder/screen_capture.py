@@ -16,6 +16,10 @@ class ScreenCapture(Protocol):
         """Capture a screen region. Returns RGB numpy array or None if unchanged."""
         ...
 
+    def close(self) -> None:
+        """Release any underlying capture device or OS handle."""
+        ...
+
 
 class DXcamCapture:
     """Windows screen capture using DXcam (DXGI Desktop Duplication API).
@@ -44,6 +48,15 @@ class DXcamCapture:
         camera = self._get_camera()
         region = (x, y, x + width, y + height)
         return camera.grab(region=region)
+
+    def close(self) -> None:
+        """Release the DXGI Desktop Duplication handle."""
+        if self._camera is not None:
+            try:
+                self._camera.release()
+            except Exception:
+                pass
+            self._camera = None
 
 
 class MssCapture:
@@ -85,6 +98,15 @@ class MssCapture:
             return None
         self._last_hash = frame_hash
         return frame
+
+    def close(self) -> None:
+        """Close the mss context and release its resources."""
+        if self._sct is not None:
+            try:
+                self._sct.close()
+            except Exception:
+                pass
+            self._sct = None
 
 
 def build_screen_capture(backend: str = "dxcam") -> ScreenCapture:

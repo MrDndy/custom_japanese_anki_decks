@@ -43,6 +43,12 @@ class LookupService:
 
     Wraps the existing normalization + dictionary + JLPT pipeline into a single
     call suitable for real-time use. Pre-warms models on init.
+
+    **Thread safety:** This class is NOT thread-safe. A single instance must be
+    constructed and used exclusively from one thread. In the real-time overlay,
+    construct this inside the NLP worker's ``run()`` method — not on the main
+    thread — so that every call to ``lookup()`` comes from the same thread that
+    created the underlying SudachiPy tokenizer and dictionary objects.
     """
 
     def __init__(self, data_dir: str = "data", online_dict: str = "off") -> None:
@@ -106,24 +112,10 @@ class LookupService:
 
     def _get_pos(self, word: str) -> str:
         """Return the first part-of-speech tag for *word* from Sudachi."""
-        try:
-            tokenizer = self._normalizer._get_tokenizer()
-            morphemes = tokenizer.tokenize(word)
-            if morphemes:
-                return morphemes[0].part_of_speech()[0]
-        except Exception:
-            pass
-        return ""
+        return self._normalizer.get_pos(word)
 
     def _is_in_vocab_db(self, expression: str) -> bool:
-        try:
-            row = self._vocab_db._conn.execute(
-                "SELECT id FROM vocabulary WHERE expression = ?",
-                (expression,),
-            ).fetchone()
-            return row is not None
-        except Exception:
-            return False
+        return self._vocab_db.has_expression(expression)
 
     def close(self) -> None:
         self._vocab_db.close()

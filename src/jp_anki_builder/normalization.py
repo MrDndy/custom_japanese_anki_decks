@@ -105,6 +105,16 @@ class SudachiNormalizer:
         self._tokenizer = dictionary.Dictionary().create()
         return self._tokenizer
 
+    def get_pos(self, word: str) -> str:
+        """Return the first part-of-speech tag for *word*, or '' on failure."""
+        try:
+            morphemes = self._get_tokenizer().tokenize(word)
+            if morphemes:
+                return morphemes[0].part_of_speech()[0]
+        except Exception:
+            pass
+        return ""
+
     def normalize_text(
         self,
         text: str,

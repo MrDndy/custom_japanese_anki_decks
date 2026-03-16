@@ -49,6 +49,9 @@ class OcrPipelineWorker:
             # Capture backend signals no change since last call.
             return None
 
+        # Note: MssCapture already computed an MD5 for its own change-detection.
+        # This second hash is identical work but keeps the ScreenCapture Protocol
+        # simple (returns frame or None) and the cost is ~0.5 ms for a 400×200 ROI.
         frame_hash = _content_hash(frame)
 
         if frame_hash in self._cache:
@@ -82,10 +85,15 @@ class OcrPipelineWorker:
         """Insert *key→value* into the LRU cache, evicting oldest if at capacity."""
         if key in self._cache:
             self._cache.move_to_end(key)
+            self._cache[key] = value
         else:
             if len(self._cache) >= self._cache_size:
                 self._cache.popitem(last=False)  # evict LRU (oldest)
             self._cache[key] = value
+
+    def close(self) -> None:
+        """Release the underlying screen capture device."""
+        self._capture.close()
 
     @property
     def cache_size(self) -> int:
@@ -100,13 +108,10 @@ def _content_hash(frame: "np.ndarray") -> str:
 
 
 def _save_frame(frame: "np.ndarray", path: Path) -> None:
-    """Write *frame* (RGB numpy array) to *path* as PNG."""
-    try:
-        from PIL import Image
-        Image.fromarray(frame, mode="RGB").save(path)
-    except ImportError:
-        import numpy as np
-        # Minimal PPM fallback if Pillow is somehow absent (should not happen in practice).
-        h, w = frame.shape[:2]
-        header = f"P6\n{w} {h}\n255\n".encode()
-        path.write_bytes(header + frame.astype("uint8").tobytes())
+    """Write *frame* (RGB numpy array) to *path* as PNG.
+
+    Pillow is a hard requirement for the OCR pipeline (manga-ocr and Tesseract
+    both depend on it), so the import is expected to always succeed.
+    """
+    from PIL import Image
+    Image.fromarray(frame, mode="RGB").save(path)

@@ -148,12 +148,17 @@ try:
 
         def _position_near_cursor(self, cursor_x: int, cursor_y: int) -> None:
             """Move the widget near *cursor_x/y*, clamping to screen bounds."""
+            from PySide6.QtCore import QPoint
+
             x = cursor_x + _CURSOR_OFFSET_X
             y = cursor_y + _CURSOR_OFFSET_Y
             w = self.width()
             h = self.height()
 
-            screen = QApplication.primaryScreen()
+            # Use the screen the cursor is actually on (multi-monitor safe).
+            screen = QApplication.screenAt(QPoint(cursor_x, cursor_y))
+            if screen is None:
+                screen = QApplication.primaryScreen()
             if screen is not None:
                 geom = screen.geometry()
                 # Flip left/up when popup would overflow right or bottom edge.
@@ -178,6 +183,12 @@ except ImportError:
                 "Install with: pip install PySide6"
             )
 
+        def show_results(self, results, cursor_x: int, cursor_y: int) -> None:  # noqa: ARG002
+            raise ImportError("The real-time overlay requires PySide6.")
+
+        def hide_results(self) -> None:
+            raise ImportError("The real-time overlay requires PySide6.")
+
 
 def _apply_click_through(widget) -> None:
     """Set WS_EX_LAYERED | WS_EX_TRANSPARENT on *widget* so mouse events pass through.
@@ -192,11 +203,20 @@ def _apply_click_through(widget) -> None:
         _GWL_EXSTYLE = -20
         _WS_EX_LAYERED = 0x00080000
         _WS_EX_TRANSPARENT = 0x00000020
+        _SWP_NOMOVE = 0x0002
+        _SWP_NOSIZE = 0x0001
+        _SWP_NOZORDER = 0x0004
+        _SWP_FRAMECHANGED = 0x0020
 
         hwnd = int(widget.winId())
         ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, _GWL_EXSTYLE)
         ctypes.windll.user32.SetWindowLongW(
             hwnd, _GWL_EXSTYLE, ex_style | _WS_EX_LAYERED | _WS_EX_TRANSPARENT
+        )
+        # Flush the style change so Windows applies it immediately.
+        ctypes.windll.user32.SetWindowPos(
+            hwnd, None, 0, 0, 0, 0,
+            _SWP_NOMOVE | _SWP_NOSIZE | _SWP_NOZORDER | _SWP_FRAMECHANGED,
         )
         logger.debug("click-through set for hwnd=%d", hwnd)
     except Exception as exc:

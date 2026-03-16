@@ -91,5 +91,18 @@ class VocabDB:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
+    def has_expression(self, expression: str) -> bool:
+        """Return True if *expression* already exists in the vocabulary table."""
+        try:
+            row = self._conn.execute(
+                "SELECT id FROM vocabulary WHERE expression = ?",
+                (expression,),
+            ).fetchone()
+            return row is not None
+        except Exception:
+            return False
+
     def close(self) -> None:
-        self._conn.close()
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
