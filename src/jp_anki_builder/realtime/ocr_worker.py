@@ -68,7 +68,20 @@ class OcrPipelineWorker:
         return text or None
 
     def _run_ocr(self, frame: "np.ndarray") -> str:
-        """Save *frame* to a temp PNG file, run OCR, clean up, and return text."""
+        """Run OCR on *frame*, preferring in-memory path when available.
+
+        If the OCR provider exposes ``extract_text_image(image)``, call it
+        directly with the numpy array — no temp file needed.  Otherwise fall
+        back to saving a temp PNG file and calling ``extract_text(path)``.
+        """
+        if callable(getattr(self._ocr, "extract_text_image", None)):
+            try:
+                text = self._ocr.extract_text_image(frame)
+                return text if isinstance(text, str) else ""
+            except Exception as exc:
+                logger.warning("OCR (in-memory) failed: %s", exc)
+                return ""
+
         tmp_path: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:

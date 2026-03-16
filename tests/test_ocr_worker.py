@@ -19,10 +19,14 @@ def _frame(value: int = 42, shape: tuple = (10, 10, 3)) -> np.ndarray:
 
 
 def _make_worker(capture_returns=None, ocr_text="テスト", cache_size=64):
-    """Build a worker with mocked capture and OCR provider."""
+    """Build a worker with mocked capture and OCR provider.
+
+    The OCR mock is spec-restricted to ``extract_text`` so the file-based
+    path is exercised (no accidental ``extract_text_image`` auto-creation).
+    """
     capture = MagicMock()
     capture.grab_region.return_value = capture_returns
-    ocr = MagicMock()
+    ocr = MagicMock(spec=["extract_text"])
     ocr.extract_text.return_value = ocr_text
     worker = OcrPipelineWorker(capture, ocr, cache_size=cache_size)
     return worker, capture, ocr
@@ -114,6 +118,36 @@ class TestCaching:
 
 
 # ---------------------------------------------------------------------------
+# In-memory OCR path
+# ---------------------------------------------------------------------------
+
+class TestInMemoryOcr:
+    def test_uses_extract_text_image_when_available(self):
+        frame = _frame(50)
+        capture = MagicMock()
+        capture.grab_region.return_value = frame
+        ocr = MagicMock()
+        ocr.extract_text_image.return_value = "直接"
+        ocr.extract_text.return_value = "ファイル"
+        worker = OcrPipelineWorker(capture, ocr)
+        result = worker.process_region(0, 0, 10, 10)
+        assert result == "直接"
+        ocr.extract_text_image.assert_called_once()
+        ocr.extract_text.assert_not_called()
+
+    def test_falls_back_to_temp_file_when_no_extract_text_image(self):
+        frame = _frame(51)
+        capture = MagicMock()
+        capture.grab_region.return_value = frame
+        ocr = MagicMock(spec=["extract_text"])
+        ocr.extract_text.return_value = "ファイル"
+        worker = OcrPipelineWorker(capture, ocr)
+        result = worker.process_region(0, 0, 10, 10)
+        assert result == "ファイル"
+        ocr.extract_text.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # Temp file cleanup
 # ---------------------------------------------------------------------------
 
@@ -197,7 +231,7 @@ class TestCaptureHashReuse:
         frame = _frame(88)
         capture = MagicMock(spec=["grab_region", "close"])  # no last_content_hash
         capture.grab_region.return_value = frame
-        ocr = MagicMock()
+        ocr = MagicMock(spec=["extract_text"])
         ocr.extract_text.return_value = "漢字"
 
         worker = OcrPipelineWorker(capture, ocr)

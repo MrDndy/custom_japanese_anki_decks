@@ -137,6 +137,16 @@ class MangaOcrProvider:
             return ""
         return re.sub(r"\s+", "", text).strip()
 
+    def extract_text_image(self, image: "np.ndarray") -> str:
+        """Run OCR directly on a numpy array, bypassing the temp-file round-trip."""
+        from PIL import Image
+        engine = self._get_engine()
+        pil_image = Image.fromarray(image, mode="RGB")
+        text = engine(pil_image)
+        if not isinstance(text, str):
+            return ""
+        return re.sub(r"\s+", "", text).strip()
+
 
 @dataclass
 class OcrCandidate:
