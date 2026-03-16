@@ -317,7 +317,7 @@ def build_ocr_provider(
     language: str = "jpn",
     tesseract_cmd: str | None = None,
     preprocess: bool = True,
-):
+) -> OcrProvider:
     if mode == "sidecar":
         return SidecarOcrProvider()
     if mode == "manga-ocr":

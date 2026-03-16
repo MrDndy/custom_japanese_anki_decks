@@ -143,6 +143,7 @@ class Pipeline:
             online_dict=online_dict,
             resume=resume,
             save_debug_overlays=save_debug_overlays,
+            detector_mode=detector_mode,
         )
         review_result = self.review(
             source=source,

@@ -1,3 +1,8 @@
+"""Format handlers for extracting page images from manga containers.
+
+Supports directories of images, CBZ (ZIP), CBR (RAR), PDF, and EPUB files.
+All handlers apply spread detection to wide pages before returning results.
+"""
 from __future__ import annotations
 
 import logging
@@ -83,47 +88,87 @@ def _has_substantial_japanese(text: str | None) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Spread-aware page appender
+# ---------------------------------------------------------------------------
+
+def _append_image_pages(
+    results: list[PageResult],
+    img: PilImage.Image,
+    source_file: str,
+    page_counter: list[int],
+) -> None:
+    """Apply spread detection to *img* and append one or two PageResults.
+
+    *page_counter* is a single-element list used as a mutable counter so
+    callers don't need to track page numbers explicitly.
+    """
+    halves = detect_and_split_spread(img)
+    if len(halves) == 1:
+        results.append(PageResult(
+            image=halves[0],
+            text=None,
+            page_number=page_counter[0],
+            source_file=source_file,
+        ))
+        page_counter[0] += 1
+    else:
+        for half_idx, half_img in enumerate(halves):
+            results.append(PageResult(
+                image=half_img,
+                text=None,
+                page_number=page_counter[0],
+                source_file=f"{source_file}::half_{half_idx}",
+            ))
+            page_counter[0] += 1
+
+
+# ---------------------------------------------------------------------------
 # Handlers
 # ---------------------------------------------------------------------------
 
 def _handle_directory(path: Path) -> list[PageResult]:
+    from PIL import Image
+
     if path.is_file():
         if path.suffix.lower() not in IMAGE_EXTENSIONS:
             return []
-        from PIL import Image
         img = Image.open(path)
         img.load()
-        return [PageResult(image=img, text=None, page_number=1, source_file=str(path))]
+        results: list[PageResult] = []
+        _append_image_pages(results, img, str(path), [1])
+        return results
 
     image_paths = sorted(
         p for p in path.rglob("*")
         if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
     )
     results = []
-    for i, ip in enumerate(image_paths, start=1):
-        from PIL import Image
+    page_counter = [1]
+    for ip in image_paths:
         img = Image.open(ip)
         img.load()
-        results.append(PageResult(image=img, text=None, page_number=i, source_file=str(ip)))
+        _append_image_pages(results, img, str(ip), page_counter)
     return results
 
 
 def _handle_cbz(path: Path) -> list[PageResult]:
+    import io
+    from PIL import Image
+
     try:
         from natsort import natsorted
     except ImportError:
         natsorted = sorted  # type: ignore[assignment]
 
     results = []
+    page_counter = [1]
     with zipfile.ZipFile(path, "r") as zf:
         names = [
             n for n in zf.namelist()
             if Path(n).suffix.lower() in IMAGE_EXTENSIONS
         ]
         names = natsorted(names)
-        for i, name in enumerate(names, start=1):
-            from PIL import Image
-            import io
+        for name in names:
             data = zf.read(name)
             try:
                 img = Image.open(io.BytesIO(data))
@@ -131,11 +176,14 @@ def _handle_cbz(path: Path) -> list[PageResult]:
             except Exception as exc:
                 logger.warning("CBZ: skipping %s — %s", name, exc)
                 continue
-            results.append(PageResult(image=img, text=None, page_number=i, source_file=name))
+            _append_image_pages(results, img, name, page_counter)
     return results
 
 
 def _handle_cbr(path: Path) -> list[PageResult]:
+    import io
+    from PIL import Image
+
     if not _RARFILE_AVAILABLE:
         raise RuntimeError(
             "rarfile is required to open CBR files. "
@@ -150,15 +198,14 @@ def _handle_cbr(path: Path) -> list[PageResult]:
         natsorted = sorted  # type: ignore[assignment]
 
     results = []
+    page_counter = [1]
     with rarfile.RarFile(str(path)) as rf:
         names = [
             n for n in rf.namelist()
             if Path(n).suffix.lower() in IMAGE_EXTENSIONS
         ]
         names = natsorted(names)
-        for i, name in enumerate(names, start=1):
-            from PIL import Image
-            import io
+        for name in names:
             data = rf.read(name)
             try:
                 img = Image.open(io.BytesIO(data))
@@ -166,7 +213,7 @@ def _handle_cbr(path: Path) -> list[PageResult]:
             except Exception as exc:
                 logger.warning("CBR: skipping %s — %s", name, exc)
                 continue
-            results.append(PageResult(image=img, text=None, page_number=i, source_file=name))
+            _append_image_pages(results, img, name, page_counter)
     return results
 
 
@@ -178,32 +225,35 @@ def _handle_pdf(path: Path) -> list[PageResult]:
         )
 
     results = []
-    with _open_pdfplumber(path) as pdf:
-        for i, page in enumerate(pdf.pages, start=1):
-            text = page.extract_text()
-            if _has_substantial_japanese(text):
-                results.append(PageResult(
-                    image=None,
-                    text=text,
-                    page_number=i,
-                    source_file=str(path),
-                ))
-            else:
-                # Fall back to image rendering via pypdfium2
-                if not _PYPDFIUM2_AVAILABLE:
-                    raise RuntimeError(
-                        "pypdfium2 is required for rendering image-only PDF pages. "
-                        "Install it with: pip install pypdfium2"
-                    )
-                doc = _open_pypdfium2(path)
-                pdf_page = doc[i - 1]
-                pil_img = pdf_page.render(scale=300 / 72).to_pil()
-                results.append(PageResult(
-                    image=pil_img,
-                    text=None,
-                    page_number=i,
-                    source_file=str(path),
-                ))
+    page_counter = [1]
+    _pypdfium2_doc = None
+    try:
+        with _open_pdfplumber(path) as pdf:
+            for i, page in enumerate(pdf.pages, start=1):
+                text = page.extract_text()
+                if _has_substantial_japanese(text):
+                    results.append(PageResult(
+                        image=None,
+                        text=text,
+                        page_number=page_counter[0],
+                        source_file=f"{path}::page{i}",
+                    ))
+                    page_counter[0] += 1
+                else:
+                    # Fall back to image rendering via pypdfium2
+                    if not _PYPDFIUM2_AVAILABLE:
+                        raise RuntimeError(
+                            "pypdfium2 is required for rendering image-only PDF pages. "
+                            "Install it with: pip install pypdfium2"
+                        )
+                    if _pypdfium2_doc is None:
+                        _pypdfium2_doc = _open_pypdfium2(path)
+                    pdf_page = _pypdfium2_doc[i - 1]
+                    pil_img = pdf_page.render(scale=300 / 72).to_pil()
+                    _append_image_pages(results, pil_img, f"{path}::page{i}", page_counter)
+    finally:
+        if _pypdfium2_doc is not None:
+            _pypdfium2_doc.close()
 
     return results
 
@@ -217,12 +267,11 @@ def _handle_epub(path: Path) -> list[PageResult]:
     import io
     import ebooklib
     from ebooklib import epub
-    from bs4 import BeautifulSoup
     from PIL import Image
 
     book = epub.read_epub(str(path))
     results = []
-    page_num = 1
+    page_counter = [1]
     for item in book.get_items_of_type(ebooklib.ITEM_IMAGE):
         data = item.get_content()
         try:
@@ -231,13 +280,7 @@ def _handle_epub(path: Path) -> list[PageResult]:
         except Exception as exc:
             logger.warning("EPUB: skipping image item — %s", exc)
             continue
-        results.append(PageResult(
-            image=img,
-            text=None,
-            page_number=page_num,
-            source_file=item.get_name(),
-        ))
-        page_num += 1
+        _append_image_pages(results, img, item.get_name(), page_counter)
     return results
 
 

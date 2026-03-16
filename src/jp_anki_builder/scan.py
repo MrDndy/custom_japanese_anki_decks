@@ -163,6 +163,7 @@ def _ocr_region_crops(provider, pil_image, regions, tmp_dir: Path) -> tuple[list
         region_records.append({
             "bbox": list(region.bbox),
             "confidence": region.confidence,
+            "region_type": region.region_type,
             "text": text,
         })
     return region_texts, region_records
@@ -361,6 +362,20 @@ def run_scan(
                     # Plain OCR on the whole page image
                     texts = _ocr_pil_image(provider, pil_image, tmp_dir)
                     region_records_for_json = []
+
+                if save_debug_overlays and pil_image is not None:
+                    # Save pil_image to a temp file so _save_debug_overlay can open it.
+                    # Use a sanitized filename derived from image_key.
+                    safe_name = Path(image_key.replace("::", "_")).name or "page.png"
+                    if not safe_name.lower().endswith((".png", ".jpg", ".jpeg")):
+                        safe_name += ".png"
+                    tmp_img_path = tmp_dir / safe_name
+                    pil_image.save(str(tmp_img_path))
+                    text_for_overlay = texts[0] if texts else ""
+                    _save_debug_overlay(
+                        tmp_img_path, text_for_overlay, paths.debug_dir,
+                        regions=region_records_for_json if region_records_for_json else None,
+                    )
 
             text = texts[0] if texts else ""
             candidates, normalized_records, surface_tokens = _process_texts_to_candidates(

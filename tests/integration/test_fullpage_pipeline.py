@@ -346,6 +346,7 @@ class TestPdfEmbeddedTextExtraction:
         mock_pdfpage.render.return_value = mock_render
         mock_pdfium_doc = MagicMock()
         mock_pdfium_doc.__iter__ = lambda s: iter([mock_pdfpage])
+        mock_pdfium_doc.__getitem__ = lambda s, i: mock_pdfpage
 
         monkeypatch.setattr(fh_module, "_PDFPLUMBER_AVAILABLE", True)
         monkeypatch.setattr(fh_module, "_PYPDFIUM2_AVAILABLE", True)

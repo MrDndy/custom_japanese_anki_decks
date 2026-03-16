@@ -253,6 +253,8 @@ class TestExtractPagesPDF:
                 return self
             def __exit__(self, *args):
                 pass
+            def close(self):
+                pass
 
         monkeypatch.setattr(format_handlers, "_open_pdfplumber", lambda path: FakePDF())
         monkeypatch.setattr(format_handlers, "_open_pypdfium2", lambda path: FakePdfium2Doc())

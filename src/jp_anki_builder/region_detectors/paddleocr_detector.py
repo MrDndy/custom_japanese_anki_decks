@@ -1,3 +1,4 @@
+"""PaddleOCR-based RegionDetector implementation for full-page manga parsing."""
 from __future__ import annotations
 
 import logging
@@ -52,9 +53,15 @@ class PaddleOcrDetector:
             if item is None:
                 continue
             # PaddleOCR returns: [[x1,y1],[x2,y1],[x2,y2],[x1,y2]], confidence
-            quad, confidence = item
+            # Older versions may omit the confidence value, so unpack defensively.
+            if isinstance(item, (list, tuple)) and len(item) == 2:
+                quad, confidence = item
+                confidence = float(confidence)
+            else:
+                quad = item
+                confidence = 1.0
             xs = [pt[0] for pt in quad]
             ys = [pt[1] for pt in quad]
             bbox = (int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys)))
-            regions.append(DetectedRegion(bbox=bbox, confidence=float(confidence)))
+            regions.append(DetectedRegion(bbox=bbox, confidence=confidence))
         return regions
