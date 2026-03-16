@@ -164,6 +164,48 @@ class TestTempFileCleanup:
 
 
 # ---------------------------------------------------------------------------
+# Capture hash reuse
+# ---------------------------------------------------------------------------
+
+class TestCaptureHashReuse:
+    def test_skips_rehash_when_capture_provides_hash(self, monkeypatch):
+        """When capture.last_content_hash is set, OcrPipelineWorker should
+        use it instead of computing _content_hash itself."""
+        frame = _frame(99)
+        capture = MagicMock()
+        capture.grab_region.return_value = frame
+        capture.last_content_hash = _content_hash(frame)
+        ocr = MagicMock()
+        ocr.extract_text.return_value = "テスト"
+
+        # Track calls to _content_hash — after the fix it should NOT be called
+        # because the capture already provides a hash.
+        import jp_anki_builder.realtime.ocr_worker as _mod
+        calls: list[object] = []
+        original_fn = _mod._content_hash
+        def tracking_hash(f):
+            calls.append(f)
+            return original_fn(f)
+        monkeypatch.setattr(_mod, "_content_hash", tracking_hash)
+
+        worker = OcrPipelineWorker(capture, ocr, cache_size=64)
+        worker.process_region(0, 0, 10, 10)
+        assert len(calls) == 0, "_content_hash should not be called when capture provides hash"
+
+    def test_falls_back_to_own_hash_when_capture_hash_missing(self):
+        """When capture has no last_content_hash attr, worker computes its own."""
+        frame = _frame(88)
+        capture = MagicMock(spec=["grab_region", "close"])  # no last_content_hash
+        capture.grab_region.return_value = frame
+        ocr = MagicMock()
+        ocr.extract_text.return_value = "漢字"
+
+        worker = OcrPipelineWorker(capture, ocr)
+        result = worker.process_region(0, 0, 10, 10)
+        assert result == "漢字"
+
+
+# ---------------------------------------------------------------------------
 # Content hash helper
 # ---------------------------------------------------------------------------
 

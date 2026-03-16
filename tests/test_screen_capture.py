@@ -169,6 +169,40 @@ class TestDXcamCaptureUnit:
 # Live capture tests — skipped in headless CI
 # ---------------------------------------------------------------------------
 
+class TestLastContentHash:
+    def test_mss_capture_has_last_content_hash_property(self):
+        cap = MssCapture()
+        assert cap.last_content_hash is None  # before any grab
+
+    def test_mss_capture_hash_set_after_grab(self):
+        shot = _make_mss_shot(r=42)
+        cap, _ = self._make_capture_with_mock(shot)
+        cap.grab_region(0, 0, 4, 3)
+        assert cap.last_content_hash is not None
+        assert isinstance(cap.last_content_hash, str)
+        int(cap.last_content_hash, 16)  # valid hex
+
+    def test_mss_capture_hash_none_when_unchanged(self):
+        shot = _make_mss_shot()
+        cap, _ = self._make_capture_with_mock(shot)
+        cap.grab_region(0, 0, 4, 3)
+        cap.grab_region(0, 0, 4, 3)  # returns None (unchanged)
+        # Hash should still hold the value from last successful grab
+        assert cap.last_content_hash is not None
+
+    def test_dxcam_capture_last_content_hash_always_none(self):
+        cap = DXcamCapture()
+        assert cap.last_content_hash is None
+
+    def _make_capture_with_mock(self, shot_array):
+        """Same helper as TestMssCaptureUnit."""
+        cap = MssCapture()
+        mock_sct = MagicMock()
+        mock_sct.grab.return_value = shot_array
+        cap._sct = mock_sct
+        return cap, mock_sct
+
+
 @pytest.mark.skipif(
     True,
     reason="Live screen capture requires a display adapter; skip in CI",

@@ -37,7 +37,7 @@ class OcrPipelineWorker:
 
         Steps:
         1. Grab the screen region — None from capture means content is unchanged.
-        2. Compute a content hash of the captured frame.
+        2. Use the capture backend's content hash if available, else compute one.
         3. Cache hit → return cached text without re-running OCR.
         4. Save frame to a temp PNG file (manga-ocr expects a file path).
         5. Run OCR provider on the file.
@@ -49,10 +49,12 @@ class OcrPipelineWorker:
             # Capture backend signals no change since last call.
             return None
 
-        # Note: MssCapture already computed an MD5 for its own change-detection.
-        # This second hash is identical work but keeps the ScreenCapture Protocol
-        # simple (returns frame or None) and the cost is ~0.5 ms for a 400×200 ROI.
-        frame_hash = _content_hash(frame)
+        # Reuse the content hash from the capture backend when available
+        # (MssCapture already computed one for change-detection). Fall back
+        # to computing our own only when the backend doesn't provide a string.
+        frame_hash = getattr(self._capture, "last_content_hash", None)
+        if not isinstance(frame_hash, str):
+            frame_hash = _content_hash(frame)
 
         if frame_hash in self._cache:
             # Move to end to mark as most recently used.

@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class ScreenCapture(Protocol):
+    @property
+    def last_content_hash(self) -> str | None:
+        """Content hash from the most recent grab, or None if unavailable."""
+        ...
+
     def grab_region(self, x: int, y: int, width: int, height: int) -> "np.ndarray | None":
         """Capture a screen region. Returns RGB numpy array or None if unchanged."""
         ...
@@ -30,6 +35,10 @@ class DXcamCapture:
 
     def __init__(self) -> None:
         self._camera = None
+
+    @property
+    def last_content_hash(self) -> str | None:
+        return None
 
     def _get_camera(self):
         if self._camera is not None:
@@ -70,6 +79,10 @@ class MssCapture:
     def __init__(self) -> None:
         self._sct = None
         self._last_hash: str | None = None
+
+    @property
+    def last_content_hash(self) -> str | None:
+        return self._last_hash
 
     def _get_sct(self):
         if self._sct is not None:
