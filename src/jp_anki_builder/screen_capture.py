@@ -29,16 +29,20 @@ class ScreenCapture(Protocol):
 class DXcamCapture:
     """Windows screen capture using DXcam (DXGI Desktop Duplication API).
 
-    ~240 FPS capable, ~4ms latency. Returns None natively when the captured
-    region has not changed since the last call (built-in change detection).
+    ~240 FPS capable, ~4ms latency.  An MD5 content hash is used for
+    change detection because DXcam's native None return depends on
+    compositor timing and can produce both false positives (returning a
+    frame when nothing changed) and false negatives (None when content
+    did change).
     """
 
     def __init__(self) -> None:
         self._camera = None
+        self._last_hash: str | None = None
 
     @property
     def last_content_hash(self) -> str | None:
-        return None
+        return self._last_hash
 
     def _get_camera(self):
         if self._camera is not None:
@@ -56,7 +60,14 @@ class DXcamCapture:
         """Capture region. Returns RGB numpy array or None if content unchanged."""
         camera = self._get_camera()
         region = (x, y, x + width, y + height)
-        return camera.grab(region=region)
+        frame = camera.grab(region=region)
+        if frame is None:
+            return None
+        frame_hash = hashlib.md5(frame.tobytes(), usedforsecurity=False).hexdigest()
+        if frame_hash == self._last_hash:
+            return None
+        self._last_hash = frame_hash
+        return frame
 
     def close(self) -> None:
         """Release the DXGI Desktop Duplication handle."""

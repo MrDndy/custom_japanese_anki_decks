@@ -203,6 +203,47 @@ class TestLastContentHash:
         return cap, mock_sct
 
 
+class TestDXcamChangeDetection:
+    def _make_dxcam_with_mock(self, grab_return=None):
+        cap = DXcamCapture()
+        mock_camera = MagicMock()
+        mock_camera.grab.return_value = grab_return
+        cap._camera = mock_camera
+        return cap, mock_camera
+
+    def test_returns_none_for_duplicate_frame(self):
+        """DXcam returns frame even if content unchanged; our hash layer catches it."""
+        frame = np.full((10, 10, 3), 42, dtype=np.uint8)
+        cap, mock_camera = self._make_dxcam_with_mock(grab_return=frame)
+        first = cap.grab_region(0, 0, 10, 10)
+        assert first is not None
+        # Same content again — should be detected as unchanged
+        second = cap.grab_region(0, 0, 10, 10)
+        assert second is None
+
+    def test_returns_frame_after_content_change(self):
+        frame1 = np.full((10, 10, 3), 10, dtype=np.uint8)
+        frame2 = np.full((10, 10, 3), 20, dtype=np.uint8)
+        cap, mock_camera = self._make_dxcam_with_mock()
+        mock_camera.grab.side_effect = [frame1, frame2]
+        first = cap.grab_region(0, 0, 10, 10)
+        second = cap.grab_region(0, 0, 10, 10)
+        assert first is not None
+        assert second is not None
+
+    def test_native_none_still_returns_none(self):
+        """If DXcam itself returns None (frame not ready), we propagate it."""
+        cap, mock_camera = self._make_dxcam_with_mock(grab_return=None)
+        assert cap.grab_region(0, 0, 10, 10) is None
+
+    def test_last_content_hash_set_after_grab(self):
+        frame = np.full((10, 10, 3), 55, dtype=np.uint8)
+        cap, _ = self._make_dxcam_with_mock(grab_return=frame)
+        cap.grab_region(0, 0, 10, 10)
+        assert cap.last_content_hash is not None
+        assert isinstance(cap.last_content_hash, str)
+
+
 @pytest.mark.skipif(
     True,
     reason="Live screen capture requires a display adapter; skip in CI",
