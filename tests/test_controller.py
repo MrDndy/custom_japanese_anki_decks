@@ -102,6 +102,50 @@ class TestMapLogicalToPhysical:
         assert x + w // 2 == cx
         assert y + h // 2 == cy
 
+    def test_clamps_to_screen_upper_bound(self):
+        """ROI near bottom-right edge should be pulled back within screen."""
+        x, y, w, h = _map_logical_to_physical(
+            cursor_x=1900, cursor_y=1060,
+            roi_width=400, roi_height=200,
+            origin_x=0, origin_y=0,
+            dpr=1.0,
+            screen_width=1920, screen_height=1080,
+        )
+        # Right edge must not exceed screen width
+        assert x + w <= 1920
+        # Bottom edge must not exceed screen height
+        assert y + h <= 1080
+        assert x >= 0
+        assert y >= 0
+
+    def test_no_clamp_when_screen_size_not_provided(self):
+        """When screen_width/screen_height are 0 (unknown), no upper clamping."""
+        x, y, w, h = _map_logical_to_physical(
+            cursor_x=1900, cursor_y=1060,
+            roi_width=400, roi_height=200,
+            origin_x=0, origin_y=0,
+            dpr=1.0,
+            screen_width=0, screen_height=0,
+        )
+        # Without screen bounds, only lower clamp (>= 0) applies
+        assert x >= 0
+        assert y >= 0
+        # ROI extends beyond a typical 1920x1080 screen — proves no upper clamping
+        assert x + w > 1920, "ROI should extend past screen edge when no upper clamp"
+        assert y + h > 1080, "ROI should extend past screen edge when no upper clamp"
+
+    def test_clamp_with_dpr_scaling(self):
+        """Upper-bound clamping should work in physical pixel coordinates."""
+        x, y, w, h = _map_logical_to_physical(
+            cursor_x=1500, cursor_y=850,
+            roi_width=400, roi_height=200,
+            origin_x=0, origin_y=0,
+            dpr=1.25,
+            screen_width=2400, screen_height=1350,  # 1920x1080 * 1.25
+        )
+        assert x + w <= 2400
+        assert y + h <= 1350
+
 
 # ---------------------------------------------------------------------------
 # Module-level tests (no Qt required)
