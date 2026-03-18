@@ -168,6 +168,7 @@ class TestModuleImport:
 # Qt lifecycle tests — skipped when PySide6 is not installed
 # ---------------------------------------------------------------------------
 
+@pytest.mark.gui
 @pytest.mark.skipif(not _PYSIDE6_AVAILABLE, reason="PySide6 not installed")
 class TestControllerLifecycle:
     @pytest.fixture(autouse=True)

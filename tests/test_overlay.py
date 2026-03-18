@@ -72,6 +72,7 @@ class TestApplyClickThrough:
 # GUI tests — skipped when PySide6 is not installed
 # ---------------------------------------------------------------------------
 
+@pytest.mark.gui
 @pytest.mark.skipif(not _PYSIDE6_AVAILABLE, reason="PySide6 not installed")
 class TestOverlayWidgetFlags:
     @pytest.fixture(autouse=True)
@@ -112,6 +113,7 @@ class TestOverlayWidgetFlags:
         widget.deleteLater()
 
 
+@pytest.mark.gui
 @pytest.mark.skipif(not _PYSIDE6_AVAILABLE, reason="PySide6 not installed")
 class TestOverlayWidgetBehaviour:
     @pytest.fixture(autouse=True)
@@ -155,6 +157,7 @@ class TestOverlayWidgetBehaviour:
         widget.deleteLater()
 
 
+@pytest.mark.gui
 @pytest.mark.skipif(not _PYSIDE6_AVAILABLE, reason="PySide6 not installed")
 class TestPositioning:
     @pytest.fixture(autouse=True)

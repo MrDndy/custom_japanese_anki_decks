@@ -1,3 +1,4 @@
+"""Qt-threaded controller for the real-time capture → OCR → lookup pipeline."""
 from __future__ import annotations
 
 import logging

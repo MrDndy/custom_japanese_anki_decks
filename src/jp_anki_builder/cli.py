@@ -554,6 +554,45 @@ def install_jlpt(
     typer.echo(f"[INFO] Output: {summary.output_path}")
 
 
+@app.command()
+def overlay(
+    data_dir: str = typer.Option("data", help="Data storage directory."),
+    ocr_mode: str = typer.Option("manga-ocr", help="OCR backend: manga-ocr, tesseract, or sidecar."),
+    capture_backend: str = typer.Option("dxcam", help="Screen capture backend: dxcam or mss."),
+) -> None:
+    """Launch the real-time screen OCR overlay."""
+    try:
+        from jp_anki_builder.realtime.app import OverlayApp
+    except ImportError as exc:
+        typer.echo(f"[ERROR] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    cfg = load_project_config(data_dir=data_dir)
+    from jp_anki_builder.realtime.hotkeys import (
+        DEFAULT_HOTKEY_ADD_WORD,
+        DEFAULT_HOTKEY_EXPORT,
+        DEFAULT_HOTKEY_SCAN,
+    )
+    anki_client = None
+    if cfg.ankiconnect_enabled:
+        from jp_anki_builder.anki_connect import AnkiConnectClient
+        anki_client = AnkiConnectClient(port=cfg.ankiconnect_port or 8765)
+    try:
+        overlay_app = OverlayApp(
+            data_dir=data_dir,
+            ocr_mode=ocr_mode,
+            capture_backend=capture_backend,
+            hotkey_scan=cfg.hotkey_scan or DEFAULT_HOTKEY_SCAN,
+            hotkey_add_word=cfg.hotkey_add_word or DEFAULT_HOTKEY_ADD_WORD,
+            hotkey_export=cfg.hotkey_export or DEFAULT_HOTKEY_EXPORT,
+            anki_client=anki_client,
+        )
+        raise typer.Exit(code=overlay_app.run())
+    except ImportError as exc:
+        typer.echo(f"[ERROR] {exc}")
+        raise typer.Exit(code=1) from exc
+
+
 @config_app.command("show")
 def config_show(
     data_dir: str = typer.Option("data", help="Data storage directory."),

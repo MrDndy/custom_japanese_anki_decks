@@ -33,6 +33,11 @@ class ProjectDefaults:
     volume: str | None = None
     chapter: str | None = None
     detector_mode: str | None = None
+    hotkey_scan: str | None = None
+    hotkey_add_word: str | None = None
+    hotkey_export: str | None = None
+    ankiconnect_enabled: bool | None = None
+    ankiconnect_port: int | None = None
 
     def merge(self, other: ProjectDefaults) -> ProjectDefaults:
         """Return a new ProjectDefaults with non-None values from *other* taking precedence."""
@@ -119,8 +124,14 @@ def set_config(key: str, value: str, data_dir: str = "data", source: str | None 
     current = get_config(data_dir, source)
 
     # Coerce booleans
-    if key in ("no_preprocess", "exclude_sfx", "exclude_stray_furigana", "save_debug_overlays"):
+    if key in ("no_preprocess", "exclude_sfx", "exclude_stray_furigana", "save_debug_overlays", "ankiconnect_enabled"):
         current[key] = value.lower() in ("true", "1", "yes")
+    # Coerce integers
+    elif key in ("ankiconnect_port",):
+        try:
+            current[key] = int(value)
+        except ValueError as exc:
+            raise ValueError(f"config key {key!r} requires an integer value") from exc
     else:
         current[key] = value
 
