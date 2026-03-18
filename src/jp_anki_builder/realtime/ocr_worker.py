@@ -13,6 +13,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Minimum luminance gradient (0–255) to count a pixel as an edge.
+# Text strokes typically create gradients well above this; smooth
+# artwork gradients stay below.
+_EDGE_STRENGTH = 20.0
+
 
 class OcrPipelineWorker:
     """Captures a screen region, runs OCR, caches results.
@@ -26,11 +31,18 @@ class OcrPipelineWorker:
     and evicts the least-recently-used entry when full.
     """
 
-    def __init__(self, capture: "ScreenCapture", ocr_provider, cache_size: int = 64) -> None:
+    def __init__(
+        self,
+        capture: "ScreenCapture",
+        ocr_provider,
+        cache_size: int = 64,
+        min_edge_density: float = 0.0,
+    ) -> None:
         self._capture = capture
         self._ocr = ocr_provider
         self._cache: OrderedDict[str, str] = OrderedDict()
         self._cache_size = cache_size
+        self._min_edge_density = min_edge_density
 
     def process_region(self, x: int, y: int, width: int, height: int) -> str | None:
         """Capture and OCR a region. Returns recognized text or None if unchanged/empty.
@@ -70,10 +82,18 @@ class OcrPipelineWorker:
     def _run_ocr(self, frame: "np.ndarray") -> str:
         """Run OCR on *frame*, preferring in-memory path when available.
 
+        If ``min_edge_density`` is set, the frame is first checked for
+        text-like content via edge density. Frames with insufficient edges
+        (e.g. smooth artwork) are skipped without running the OCR model.
+
         If the OCR provider exposes ``extract_text_image(image)``, call it
         directly with the numpy array — no temp file needed.  Otherwise fall
         back to saving a temp PNG file and calling ``extract_text(path)``.
         """
+        if self._min_edge_density > 0.0 and not _has_text_content(frame, self._min_edge_density):
+            logger.debug("text-presence check failed (low edge density), skipping OCR")
+            return ""
+
         if callable(getattr(self._ocr, "extract_text_image", None)):
             try:
                 text = self._ocr.extract_text_image(frame)
@@ -120,6 +140,39 @@ class OcrPipelineWorker:
 
 def _content_hash(frame: "np.ndarray") -> str:
     return hashlib.md5(frame.tobytes(), usedforsecurity=False).hexdigest()
+
+
+def _has_text_content(frame: "np.ndarray", min_density: float) -> bool:
+    """Return True if *frame* likely contains text-like content.
+
+    Computes the fraction of pixels with strong horizontal or vertical edges.
+    Text strokes create sharp luminance gradients; smooth artwork or empty
+    regions do not.  Uses numpy only — no additional dependencies.
+
+    Args:
+        frame: RGB numpy array, shape (H, W, 3), dtype uint8.
+        min_density: minimum edge pixel fraction required (e.g. 0.03 = 3 %).
+
+    Returns:
+        True if edge density >= *min_density*, False otherwise.
+    """
+    import numpy as np
+
+    if frame.ndim != 3 or frame.shape[2] < 3:
+        return True  # cannot assess, assume text present
+
+    # BT.601 grayscale weights — float32 to avoid uint8 overflow on differences.
+    gray = (
+        0.299 * frame[:, :, 0].astype(np.float32)
+        + 0.587 * frame[:, :, 1].astype(np.float32)
+        + 0.114 * frame[:, :, 2].astype(np.float32)
+    )
+    h_edges = np.abs(gray[:, 1:] - gray[:, :-1]) > _EDGE_STRENGTH
+    v_edges = np.abs(gray[1:, :] - gray[:-1, :]) > _EDGE_STRENGTH
+    edge_pixels = int(np.count_nonzero(h_edges)) + int(np.count_nonzero(v_edges))
+    # Normalise: each pixel contributes to at most 2 edge maps.
+    density = edge_pixels / (2 * gray.size)
+    return density >= min_density
 
 
 def _save_frame(frame: "np.ndarray", path: Path) -> None:

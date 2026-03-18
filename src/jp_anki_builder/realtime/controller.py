@@ -206,9 +206,10 @@ try:
             data_dir: str = "data",
             ocr_mode: str = "manga-ocr",
             capture_backend: str = "dxcam",
-            roi_width: int = 400,
-            roi_height: int = 200,
+            roi_width: int = 150,
+            roi_height: int = 80,
             poll_ms: int = 50,
+            min_edge_density: float = 0.03,
         ) -> None:
             super().__init__()
             from jp_anki_builder.ocr import build_ocr_provider
@@ -222,7 +223,7 @@ try:
 
             capture = build_screen_capture(capture_backend)
             ocr_provider = build_ocr_provider(ocr_mode)
-            self._ocr_worker = OcrPipelineWorker(capture, ocr_provider)
+            self._ocr_worker = OcrPipelineWorker(capture, ocr_provider, min_edge_density=min_edge_density)
             self._thread: _ScanThread | None = None
             self._cursor_timer: QTimer | None = None
 

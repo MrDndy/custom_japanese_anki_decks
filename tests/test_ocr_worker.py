@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, call
 import numpy as np
 import pytest
 
-from jp_anki_builder.realtime.ocr_worker import OcrPipelineWorker, _content_hash
+from jp_anki_builder.realtime.ocr_worker import OcrPipelineWorker, _content_hash, _has_text_content
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +237,86 @@ class TestCaptureHashReuse:
         worker = OcrPipelineWorker(capture, ocr)
         result = worker.process_region(0, 0, 10, 10)
         assert result == "漢字"
+
+
+# ---------------------------------------------------------------------------
+# Text-presence filter
+# ---------------------------------------------------------------------------
+
+class TestTextPresenceFilter:
+    def _textured_frame(self, shape=(80, 150, 3)) -> np.ndarray:
+        """Return a frame with a checkerboard pattern to simulate text edges."""
+        frame = np.zeros(shape, dtype=np.uint8)
+        frame[::4, :] = 200  # horizontal stripes — high edge density
+        return frame
+
+    def test_has_text_content_true_for_high_edge_density(self):
+        frame = self._textured_frame()
+        assert _has_text_content(frame, min_density=0.03) is True
+
+    def test_has_text_content_false_for_uniform_frame(self):
+        frame = _frame(128)  # uniform — no edges
+        assert _has_text_content(frame, min_density=0.03) is False
+
+    def test_has_text_content_true_when_min_density_is_zero(self):
+        """min_density=0.0 means filter is disabled — always True."""
+        frame = _frame(128)
+        assert _has_text_content(frame, min_density=0.0) is True
+
+    def test_worker_skips_ocr_when_edge_density_too_low(self):
+        """With min_edge_density set, uniform frames should not invoke OCR."""
+        frame = _frame(200)  # uniform — no edges
+        capture = MagicMock()
+        capture.grab_region.return_value = frame
+        ocr = MagicMock(spec=["extract_text"])
+        ocr.extract_text.return_value = "テスト"
+        worker = OcrPipelineWorker(capture, ocr, min_edge_density=0.03)
+        result = worker.process_region(0, 0, 10, 10)
+        assert result is None
+        ocr.extract_text.assert_not_called()
+
+    def test_worker_runs_ocr_when_edge_density_sufficient(self):
+        """With min_edge_density set, textured frames should invoke OCR."""
+        frame = self._textured_frame()
+        capture = MagicMock()
+        capture.grab_region.return_value = frame
+        ocr = MagicMock(spec=["extract_text"])
+        ocr.extract_text.return_value = "日本語"
+        worker = OcrPipelineWorker(capture, ocr, min_edge_density=0.03)
+        result = worker.process_region(0, 0, 10, 10)
+        assert result == "日本語"
+        ocr.extract_text.assert_called_once()
+
+    def test_low_density_result_is_cached(self):
+        """When edge density filter rejects a frame, the empty result is cached
+        so that a second identical frame hits the cache without re-running the
+        density check."""
+        frame = _frame(200)  # uniform — no edges
+        capture = MagicMock()
+        capture.grab_region.return_value = frame
+        ocr = MagicMock(spec=["extract_text"])
+        worker = OcrPipelineWorker(capture, ocr, min_edge_density=0.03)
+        worker.process_region(0, 0, 10, 10)
+        worker.process_region(0, 0, 10, 10)  # same frame
+        assert worker.cache_info()["size"] == 1
+        ocr.extract_text.assert_not_called()
+
+    def test_has_text_content_returns_true_for_non_rgb_frame(self):
+        """Non-RGB frames (e.g. grayscale) should pass the filter rather than crash."""
+        gray_frame = np.full((10, 10), 128, dtype=np.uint8)
+        assert _has_text_content(gray_frame, min_density=0.03) is True
+
+    def test_worker_default_min_edge_density_is_zero(self):
+        """Default min_edge_density=0.0 means the filter is disabled — uniform frames still invoke OCR."""
+        frame = _frame(50)
+        capture = MagicMock()
+        capture.grab_region.return_value = frame
+        ocr = MagicMock(spec=["extract_text"])
+        ocr.extract_text.return_value = "text"
+        worker = OcrPipelineWorker(capture, ocr)  # no min_edge_density
+        result = worker.process_region(0, 0, 10, 10)
+        assert result == "text"
+        ocr.extract_text.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
