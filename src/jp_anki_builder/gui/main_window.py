@@ -908,14 +908,24 @@ try:
         # ------------------------------------------------------------------
 
         def _on_install_jmdict(self) -> None:
-            from jp_anki_builder.dict_install import install_dictionary
-            self.set_status("Installing JMdict… (this may take a moment)")
-            try:
-                install_dictionary(data_dir=self._data_dir)
-                self.set_status("JMdict installed.")
-            except Exception as exc:
-                logger.exception("JMdict install failed")
-                self.set_status(f"JMdict install failed: {exc}")
+            from jp_anki_builder.gui.workers import DictInstallWorker
+
+            self._install_jmdict_btn.setEnabled(False)
+            self.set_status("Installing JMdict… (this may take a few minutes)")
+            worker = DictInstallWorker(data_dir=self._data_dir)
+            worker.log_message.connect(self.append_log)
+            worker.install_finished.connect(self._on_jmdict_installed)
+            worker.error.connect(self._on_jmdict_install_error)
+            self._dict_install_worker = worker
+            worker.start()
+
+        def _on_jmdict_installed(self, message: str) -> None:
+            self._install_jmdict_btn.setEnabled(True)
+            self.set_status(message)
+
+        def _on_jmdict_install_error(self, message: str) -> None:
+            self._install_jmdict_btn.setEnabled(True)
+            self.set_status(f"JMdict install failed: {message}")
 
         def _on_install_yomichan(self) -> None:
             from jp_anki_builder.yomichan_dict import YomichanDictionary

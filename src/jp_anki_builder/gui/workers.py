@@ -245,5 +245,33 @@ try:
                 logger.exception("RunAllWorker error")
                 self.error.emit(str(exc))
 
+    # -----------------------------------------------------------------------
+    # DictInstallWorker — installs JMdict dictionary off the main thread
+    # -----------------------------------------------------------------------
+
+    class DictInstallWorker(QThread):
+        """Downloads and installs the JMdict offline dictionary in a worker thread."""
+
+        log_message = Signal(str)
+        install_finished = Signal(str)
+        error = Signal(str)
+
+        def __init__(self, data_dir: str = "data") -> None:
+            super().__init__()
+            self._data_dir = data_dir
+
+        def run(self) -> None:
+            from jp_anki_builder.dict_install import install_jmdict_offline_json
+
+            try:
+                self.log_message.emit("[DICT] Installing JMdict dictionary…")
+                summary = install_jmdict_offline_json(base_dir=self._data_dir)
+                self.install_finished.emit(
+                    f"JMdict installed: {summary.entry_count} entries at {summary.output_path}"
+                )
+            except Exception as exc:
+                logger.exception("DictInstallWorker error")
+                self.error.emit(str(exc))
+
 except ImportError:
     pass  # Workers are only instantiated from within the PySide6 try block in main_window.py
