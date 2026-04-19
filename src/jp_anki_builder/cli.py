@@ -554,6 +554,192 @@ def install_jlpt(
     typer.echo(f"[INFO] Output: {summary.output_path}")
 
 
+def _infer_source_run_id_from_video(video_path: str, source: str | None, run_id: str | None) -> tuple[str, str]:
+    """Derive source and run_id from a video file path."""
+    from pathlib import Path
+    p = Path(video_path)
+    derived_source = source or p.parent.name or p.stem
+    derived_run_id = run_id or p.stem
+    return derived_source, derived_run_id
+
+
+@app.command("scan-subs")
+def scan_subs(
+    video: str = typer.Option(..., help="Video file (MKV, MP4) containing Japanese subtitles."),
+    source: str | None = typer.Option(None, help="Source id (auto-derived from video path if omitted)."),
+    run_id: str | None = typer.Option(None, help="Run id (auto-derived from video filename if omitted)."),
+    data_dir: str = typer.Option("data", help="Data storage directory."),
+    online_dict: str | None = typer.Option(None, help="Online fallback dictionary: off or jisho."),
+    track_index: int | None = typer.Option(None, help="Subtitle track index (auto-detected if omitted)."),
+) -> None:
+    """Extract Japanese subtitles from a video and produce a scan artifact."""
+    from jp_anki_builder.subtitle_extractor import run_scan_subs
+
+    derived_source, derived_run_id = _infer_source_run_id_from_video(video, source, run_id)
+    cfg = load_project_config(data_dir=data_dir, source=derived_source)
+    resolved_online_dict = online_dict or cfg.online_dict or "off"
+
+    _emit_stage_header("SCAN-SUBS")
+    try:
+        result = run_scan_subs(
+            video=video,
+            source=derived_source,
+            run_id=derived_run_id,
+            base_dir=data_dir,
+            online_dict=resolved_online_dict,
+            track_index=track_index,
+        )
+    except (ImportError, RuntimeError) as exc:
+        typer.echo(f"[ERROR] {exc}")
+        raise typer.Exit(code=1) from exc
+    except ValueError as exc:
+        typer.echo(f"[WARN] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"[OK] Extracted {result.image_count} subtitle line(s).")
+    typer.echo(f"[OK] Found {result.candidate_count} candidate word(s).")
+    typer.echo(f"[INFO] Candidate preview: {_format_word_preview(result.candidates)}")
+    typer.echo(f"[INFO] Saved scan results to: {result.artifact_path}")
+
+
+@app.command("run-subs")
+def run_subs(
+    video: str = typer.Option(..., help="Video file (MKV, MP4) containing Japanese subtitles."),
+    source: str | None = typer.Option(None, help="Source id (auto-derived from video path if omitted)."),
+    run_id: str | None = typer.Option(None, help="Run id (auto-derived from video filename if omitted)."),
+    data_dir: str = typer.Option("data", help="Data storage directory."),
+    online_dict: str | None = typer.Option(None, help="Online fallback dictionary: off or jisho."),
+    track_index: int | None = typer.Option(None, help="Subtitle track index (auto-detected if omitted)."),
+    volume: str | None = typer.Option(None, help="Optional volume label."),
+    chapter: str | None = typer.Option(None, help="Optional chapter label."),
+    exclude: list[str] = typer.Option(None, help="Words to exclude manually (repeatable)."),
+    exclude_sfx: bool | None = typer.Option(None, "--exclude-sfx/--no-exclude-sfx"),
+    exclude_stray_furigana: bool | None = typer.Option(None, "--exclude-stray-furigana/--no-exclude-stray-furigana"),
+) -> None:
+    """Extract Japanese subtitles and run the full scan -> review -> build pipeline."""
+    from jp_anki_builder.subtitle_extractor import run_scan_subs
+
+    derived_source, derived_run_id = _infer_source_run_id_from_video(video, source, run_id)
+    cfg = load_project_config(data_dir=data_dir, source=derived_source)
+    resolved_online_dict = online_dict or cfg.online_dict or "off"
+    resolved_exclude_sfx = exclude_sfx if exclude_sfx is not None else (cfg.exclude_sfx if cfg.exclude_sfx is not None else True)
+    resolved_exclude_furigana = exclude_stray_furigana if exclude_stray_furigana is not None else (cfg.exclude_stray_furigana if cfg.exclude_stray_furigana is not None else True)
+
+    _emit_stage_header("SCAN-SUBS")
+    try:
+        scan_result = run_scan_subs(
+            video=video,
+            source=derived_source,
+            run_id=derived_run_id,
+            base_dir=data_dir,
+            online_dict=resolved_online_dict,
+            track_index=track_index,
+        )
+    except (ImportError, RuntimeError) as exc:
+        typer.echo(f"[ERROR] {exc}")
+        raise typer.Exit(code=1) from exc
+    except ValueError as exc:
+        typer.echo(f"[WARN] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"[OK] Extracted {scan_result.image_count} subtitle line(s).")
+    typer.echo(f"[OK] Found {scan_result.candidate_count} candidate word(s).")
+    if scan_result.candidate_count == 0:
+        typer.echo("[WARN] No candidates detected.")
+        raise typer.Exit(code=1)
+
+    pipeline = Pipeline(data_dir=data_dir)
+    try:
+        review_result = pipeline.review(
+            source=derived_source,
+            run_id=derived_run_id,
+            exclude=exclude,
+            save_excluded_to_known=False,
+            exclude_sfx=resolved_exclude_sfx,
+            exclude_stray_furigana=resolved_exclude_furigana,
+        )
+        _emit_stage_header("REVIEW")
+        typer.echo(
+            f"[OK] I approved {review_result['approved_count']} of "
+            f"{review_result['initial_count']} candidate(s) for card building."
+        )
+        if review_result["approved_count"] == 0:
+            typer.echo("[WARN] No approved words remain after review.")
+            raise typer.Exit(code=1)
+
+        build_result = pipeline.build(
+            source=derived_source,
+            run_id=derived_run_id,
+            volume=volume,
+            chapter=chapter,
+            online_dict=resolved_online_dict,
+        )
+    except NoBuildableWordsError as exc:
+        _emit_empty_build_guidance(exc.missing_meaning_words)
+        raise typer.Exit(code=1) from exc
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    except RuntimeError as exc:
+        typer.echo(f"Run failed: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    _emit_stage_header("BUILD")
+    typer.echo(
+        f"[OK] I created cards for {build_result['buildable_word_count']} word(s): "
+        f"{_format_word_preview(build_result.get('buildable_words', []))}"
+    )
+    typer.echo("[OK] Deck package created.")
+    typer.echo(f"[INFO] Package: {build_result['package_path']}")
+
+
+@app.command("install-yomichan-dict")
+def install_yomichan_dict(
+    file: str = typer.Option(..., help="Path to a Yomichan/Yomitan format dictionary ZIP file."),
+    data_dir: str = typer.Option("data", help="Data storage directory."),
+) -> None:
+    """Install a Yomichan-format dictionary ZIP into data/dictionaries/yomichan/."""
+    import shutil
+    from pathlib import Path
+
+    from jp_anki_builder.yomichan_dict import YomichanDictionary
+
+    src = Path(file)
+    if not src.exists():
+        typer.echo(f"[WARN] File not found: {file}")
+        raise typer.Exit(code=1)
+
+    _emit_stage_header("YOMICHAN")
+    typer.echo(f"[INFO] Validating {src.name} …")
+    try:
+        d = YomichanDictionary.from_zip(src)
+    except ValueError as exc:
+        typer.echo(f"[WARN] Invalid Yomichan dictionary: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    dest_dir = Path(data_dir) / "dictionaries" / "yomichan"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / src.name
+    shutil.copy2(src, dest)
+
+    expr_count = len(d.entries)
+    typer.echo(f"[OK] Installed dictionary: {d.title!r} (revision: {d.revision})")
+    typer.echo(f"[OK] Expressions: {expr_count}")
+    typer.echo(f"[INFO] Saved to: {dest}")
+
+
+@app.command()
+def gui(
+    data_dir: str = typer.Option("data", help="Data storage directory."),
+) -> None:
+    """Launch the graphical application."""
+    try:
+        from jp_anki_builder.gui.app import launch_gui
+    except ImportError:
+        typer.echo("GUI requires PySide6. Install with: pip install PySide6")
+        raise typer.Exit(code=1)
+    raise typer.Exit(code=launch_gui(data_dir=data_dir))
+
+
 @app.command()
 def overlay(
     data_dir: str = typer.Option("data", help="Data storage directory."),

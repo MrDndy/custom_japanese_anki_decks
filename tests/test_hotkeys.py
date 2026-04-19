@@ -10,6 +10,7 @@ from jp_anki_builder.realtime.hotkeys import (
     DEFAULT_HOTKEY_SCAN,
     HotkeyManager,
     _PYNPUT_AVAILABLE,
+    _canonicalize_key,
     _parse_hotkey,
 )
 
@@ -41,19 +42,16 @@ class TestParseHotkey:
 
     def test_export_default(self):
         result = _parse_hotkey(DEFAULT_HOTKEY_EXPORT)
-        assert "ctrl" in result
         assert "shift" in result
         assert "e" in result
 
     def test_add_word_default(self):
         result = _parse_hotkey(DEFAULT_HOTKEY_ADD_WORD)
-        assert "ctrl" in result
         assert "shift" in result
-        assert "a" in result
+        assert "q" in result
 
     def test_scan_default(self):
         result = _parse_hotkey(DEFAULT_HOTKEY_SCAN)
-        assert "ctrl" in result
         assert "shift" in result
 
 
@@ -194,6 +192,75 @@ class TestPressReleaseSim:
         mgr.register("ctrl+a", MagicMock(side_effect=RuntimeError("boom")))
         # Should not raise
         self._sim_press(mgr, "ctrl", "a")
+
+
+# ---------------------------------------------------------------------------
+# _canonicalize_key — shifted number recovery
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(not _PYNPUT_AVAILABLE, reason="pynput not installed")
+class TestCanonicalizeShiftedNumbers:
+    """Shift+1 produces '!' on US keyboards — we must map it back to '1'."""
+
+    def _make_keycode(self, char: str):
+        from pynput.keyboard import KeyCode
+        return KeyCode.from_char(char)
+
+    def test_exclamation_maps_to_1(self):
+        assert _canonicalize_key(self._make_keycode("!")) == "1"
+
+    def test_at_maps_to_2(self):
+        assert _canonicalize_key(self._make_keycode("@")) == "2"
+
+    def test_hash_maps_to_3(self):
+        assert _canonicalize_key(self._make_keycode("#")) == "3"
+
+    def test_plain_number_unchanged(self):
+        assert _canonicalize_key(self._make_keycode("5")) == "5"
+
+    def test_plain_letter_unchanged(self):
+        assert _canonicalize_key(self._make_keycode("q")) == "q"
+
+
+class TestNumberedWordSelection:
+    """Shift+N hotkeys fire indexed callbacks via the press simulation."""
+
+    def _sim_press(self, mgr: HotkeyManager, *canonical_names: str) -> None:
+        import jp_anki_builder.realtime.hotkeys as _mod
+        for name in canonical_names:
+            mock_key = MagicMock()
+            with patch.object(_mod, "_canonicalize_key", return_value=name):
+                mgr._on_press(mock_key)
+
+    def _sim_release(self, mgr: HotkeyManager, *canonical_names: str) -> None:
+        import jp_anki_builder.realtime.hotkeys as _mod
+        for name in canonical_names:
+            mock_key = MagicMock()
+            with patch.object(_mod, "_canonicalize_key", return_value=name):
+                mgr._on_release(mock_key)
+
+    def test_shift_plus_1_fires_indexed_callback(self):
+        mgr = HotkeyManager()
+        called_with = []
+        mgr.register("shift+1", callback=lambda: called_with.append(0))
+        self._sim_press(mgr, "shift", "1")
+        assert called_with == [0]
+
+    def test_shift_plus_3_fires_correct_index(self):
+        mgr = HotkeyManager()
+        results = []
+        for n in range(1, 4):
+            idx = n - 1
+            mgr.register(f"shift+{n}", callback=lambda i=idx: results.append(i))
+        self._sim_press(mgr, "shift", "3")
+        assert results == [2]
+
+    def test_number_without_shift_does_not_fire(self):
+        mgr = HotkeyManager()
+        called = []
+        mgr.register("shift+1", callback=lambda: called.append(True))
+        self._sim_press(mgr, "1")
+        assert called == []
 
 
 # ---------------------------------------------------------------------------

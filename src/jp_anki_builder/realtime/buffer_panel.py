@@ -26,24 +26,27 @@ try:
     _PYSIDE6_AVAILABLE = True
 
     class BufferPanel(QWidget):
-        """Floating panel showing words added during the current session.
+        """Panel showing words added during the current session.
 
-        Always-on-top and interactable (NOT click-through — the user needs to
-        click buttons and enter text).  Should be created on the main thread.
+        When created without a parent (default), acts as a floating
+        always-on-top window.  When created with a parent widget, it
+        embeds inline without special window flags.
         """
 
         word_removed = Signal(int)    # index of removed word
         export_requested = Signal(str)  # deck name
         clear_requested = Signal()
 
-        def __init__(self) -> None:
-            super().__init__(None)
-            self.setWindowFlags(
-                Qt.WindowType.WindowStaysOnTopHint
-                | Qt.WindowType.FramelessWindowHint
-                | Qt.WindowType.Tool
-            )
-            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        def __init__(self, parent: QWidget | None = None) -> None:
+            super().__init__(parent)
+            if parent is None:
+                # Floating mode — standalone overlay window
+                self.setWindowFlags(
+                    Qt.WindowType.WindowStaysOnTopHint
+                    | Qt.WindowType.FramelessWindowHint
+                    | Qt.WindowType.Tool
+                )
+                self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
             self.setMinimumWidth(340)
             self._setup_ui()
 
@@ -202,41 +205,30 @@ try:
                 "}"
             )
             row_layout = QHBoxLayout(row_widget)
-            row_layout.setContentsMargins(8, 4, 6, 4)
+            row_layout.setContentsMargins(8, 6, 6, 6)
             row_layout.setSpacing(6)
 
-            # Surface + reading column
-            text_col = QVBoxLayout()
-            text_col.setSpacing(1)
+            # Left: word info (two lines)
+            info_col = QVBoxLayout()
+            info_col.setSpacing(2)
 
+            # Line 1: surface + reading on same line
+            top_row = QHBoxLayout()
+            top_row.setSpacing(6)
             surface_lbl = QLabel(word.dictionary_form)
             surface_lbl.setStyleSheet(
                 "color: #FFFFFF; font-size: 15px; font-weight: bold; background: transparent;"
             )
-            text_col.addWidget(surface_lbl)
+            top_row.addWidget(surface_lbl)
 
             if word.reading:
                 reading_lbl = QLabel(word.reading)
                 reading_lbl.setStyleSheet(
                     "color: #AAAAAA; font-size: 11px; background: transparent;"
                 )
-                text_col.addWidget(reading_lbl)
+                top_row.addWidget(reading_lbl, alignment=Qt.AlignmentFlag.AlignBaseline)
 
-            row_layout.addLayout(text_col)
-
-            # Meaning
-            meaning_text = word.meanings[0] if word.meanings else ""
-            meaning_lbl = QLabel(meaning_text)
-            meaning_lbl.setStyleSheet(
-                "color: #CCCCCC; font-size: 11px; background: transparent;"
-            )
-            meaning_lbl.setWordWrap(True)
-            meaning_lbl.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
-            )
-            row_layout.addWidget(meaning_lbl)
-
-            # JLPT badge
+            # JLPT badge on same line
             if word.jlpt_level:
                 badge = QLabel(word.jlpt_level)
                 badge.setStyleSheet(
@@ -244,12 +236,25 @@ try:
                     " background: rgba(90, 70, 0, 200);"
                     " border-radius: 3px; padding: 1px 4px;"
                 )
-                row_layout.addWidget(
-                    badge, alignment=Qt.AlignmentFlag.AlignVCenter
+                top_row.addWidget(badge, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+            top_row.addStretch()
+            info_col.addLayout(top_row)
+
+            # Line 2: meaning
+            meaning_text = word.meanings[0] if word.meanings else ""
+            if meaning_text:
+                meaning_lbl = QLabel(meaning_text)
+                meaning_lbl.setStyleSheet(
+                    "color: #CCCCCC; font-size: 11px; background: transparent;"
                 )
+                meaning_lbl.setWordWrap(True)
+                info_col.addWidget(meaning_lbl)
+
+            row_layout.addLayout(info_col, stretch=1)
 
             # Remove button
-            remove_btn = QPushButton("✕")
+            remove_btn = QPushButton("\u2715")
             remove_btn.setFixedSize(22, 22)
             remove_btn.setStyleSheet(
                 "QPushButton {"
@@ -260,7 +265,7 @@ try:
             )
             # Capture idx in default argument to avoid late-binding closure.
             remove_btn.clicked.connect(lambda checked=False, i=idx: self.word_removed.emit(i))
-            row_layout.addWidget(remove_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+            row_layout.addWidget(remove_btn, alignment=Qt.AlignmentFlag.AlignTop)
 
             # Insert before the trailing stretch item.
             insert_pos = max(0, self._list_layout.count() - 1)

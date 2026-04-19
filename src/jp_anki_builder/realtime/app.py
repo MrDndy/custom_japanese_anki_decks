@@ -45,6 +45,7 @@ try:
         scan_start = Signal()
         scan_stop = Signal()
         add_word = Signal()
+        add_word_at = Signal(int)  # index (0-based) of word to add
         export_session = Signal()
 
     class OverlayApp:
@@ -77,6 +78,7 @@ try:
             hotkey_add_word: str = DEFAULT_HOTKEY_ADD_WORD,
             hotkey_export: str = DEFAULT_HOTKEY_EXPORT,
             anki_client=None,
+            buffer_panel=None,
         ) -> None:
             self._qt_app = QApplication.instance() or QApplication(sys.argv)
             self._hotkey_scan = hotkey_scan
@@ -92,7 +94,8 @@ try:
                 capture_backend=capture_backend,
             )
             self._overlay = OverlayWidget()
-            self._buffer_panel = BufferPanel()
+            self._buffer_panel = buffer_panel or BufferPanel()
+            self._owns_buffer_panel = buffer_panel is None
             self._session = SessionBuffer(data_dir=data_dir, anki_client=anki_client)
             self._hotkeys = HotkeyManager()
             self._bridge = _HotkeyBridge()
@@ -123,7 +126,8 @@ try:
             except RuntimeError as exc:
                 logger.warning("hotkey manager unavailable: %s", exc)
 
-            self._buffer_panel.show()
+            if self._owns_buffer_panel:
+                self._buffer_panel.show()
             logger.info("overlay app started — hold %s to scan", self._hotkey_scan)
 
             exit_code = self._qt_app.exec()
@@ -144,7 +148,8 @@ try:
 
             try:
                 self._overlay.hide()
-                self._buffer_panel.hide()
+                if self._owns_buffer_panel:
+                    self._buffer_panel.hide()
             except Exception as exc:
                 logger.debug("widget hide error during shutdown: %s", exc)
 
@@ -168,6 +173,13 @@ try:
                 hotkey_add_word,
                 callback=lambda: self._bridge.add_word.emit(),
             )
+            # Shift+1 through Shift+9 for indexed word selection
+            for n in range(1, 10):
+                idx = n - 1  # 0-based
+                self._hotkeys.register(
+                    f"shift+{n}",
+                    callback=lambda i=idx: self._bridge.add_word_at.emit(i),
+                )
             self._hotkeys.register(
                 hotkey_export,
                 callback=lambda: self._bridge.export_session.emit(),
@@ -177,6 +189,7 @@ try:
             self._bridge.scan_start.connect(self._on_scan_start)
             self._bridge.scan_stop.connect(self._on_scan_stop)
             self._bridge.add_word.connect(self._on_add_word)
+            self._bridge.add_word_at.connect(self._on_add_word_at)
             self._bridge.export_session.connect(self._on_export_session)
 
             # --- Controller → overlay ---
@@ -224,16 +237,26 @@ try:
 
         def _on_add_word(self) -> None:
             """Add-word hotkey pressed: add current top word to session buffer."""
+            self._on_add_word_at(0)
+
+        def _on_add_word_at(self, index: int) -> None:
+            """Add word at *index* from the current lookup results to the buffer."""
             if self._last_response is None or not self._last_response.words:
-                logger.debug("add_word: no current lookup result")
+                logger.debug("add_word_at(%d): no current lookup result", index)
                 return
-            top_result = self._last_response.words[0]
-            added = self._session.add_word(top_result, self._last_response.raw_text)
+            if index >= len(self._last_response.words):
+                logger.debug(
+                    "add_word_at(%d): only %d words available",
+                    index, len(self._last_response.words),
+                )
+                return
+            result = self._last_response.words[index]
+            added = self._session.add_word(result, self._last_response.raw_text)
             if added:
-                logger.info("added word: %s", top_result.dictionary_form)
+                logger.info("added word #%d: %s", index + 1, result.dictionary_form)
                 self._buffer_panel.update_words(self._session.get_words())
             else:
-                logger.debug("add_word: duplicate, skipped")
+                logger.debug("add_word_at(%d): duplicate, skipped", index)
 
         def _on_export_session(self) -> None:
             """Export hotkey pressed: export buffer to Anki deck."""

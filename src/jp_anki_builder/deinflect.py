@@ -165,12 +165,16 @@ DEINFLECTION_RULES: list[DeinflectionRule] = [
     _r("のう",  "ぬ",  {"v5"},  "volitional (godan-nu)"),
 
     # === i-adjective forms ===
-    _r("くない", "い",  {"adj-i"}, "adj negative"),
-    _r("かった", "い",  {"adj-i"}, "adj past"),
-    _r("くて",   "い",  {"adj-i"}, "adj te-form"),
-    _r("く",     "い",  {"adj-i"}, "adj adverbial"),
-    _r("ければ", "い",  {"adj-i"}, "adj conditional"),
-    _r("かろう", "い",  {"adj-i"}, "adj volitional"),
+    # All adj-i rules require rules_in={"adj-i"} to prevent cross-type
+    # chaining (e.g. godan v5 "だく" → adj adverbial "だい").
+    # Initial terms (empty word_types) still match because _rule_matches
+    # skips the check when candidate.word_types is empty.
+    _r("くない", "い",  {"adj-i"}, "adj negative", rules_in={"adj-i"}),
+    _r("かった", "い",  {"adj-i"}, "adj past", rules_in={"adj-i"}),
+    _r("くて",   "い",  {"adj-i"}, "adj te-form", rules_in={"adj-i"}),
+    _r("く",     "い",  {"adj-i"}, "adj adverbial", rules_in={"adj-i"}),
+    _r("ければ", "い",  {"adj-i"}, "adj conditional", rules_in={"adj-i"}),
+    _r("かろう", "い",  {"adj-i"}, "adj volitional", rules_in={"adj-i"}),
 
     # === suru verb ===
     _r("した",   "する", {"vs"}, "suru past"),

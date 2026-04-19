@@ -207,10 +207,10 @@ try:
             data_dir: str = "data",
             ocr_mode: str = "manga-ocr",
             capture_backend: str = "dxcam",
-            roi_width: int = 150,
+            roi_width: int = 80,
             roi_height: int = 80,
             poll_ms: int = 50,
-            min_edge_density: float = 0.03,
+            min_edge_density: float = 0.01,
         ) -> None:
             super().__init__()
             from jp_anki_builder.ocr import build_ocr_provider

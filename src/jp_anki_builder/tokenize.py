@@ -8,6 +8,7 @@ JAPANESE_CHUNK_RE = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+")
 HAS_JAPANESE_RE = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]")
 HAS_KANJI_KATA_RE = re.compile(r"[\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff]")
 IS_HIRAGANA_RE = re.compile(r"^[\u3040-\u309f]+$")
+IS_KATAKANA_RE = re.compile(r"^[\u30A0-\u30FF]+$")
 PARTICLES = {"は", "が", "を", "に", "で", "と", "も", "の", "へ", "か"}
 POS_VERB = "\u52d5\u8a5e"
 POS_AUXILIARY = "\u52a9\u52d5\u8a5e"
@@ -183,6 +184,9 @@ def _is_candidate_token(token: str) -> bool:
     if not cleaned:
         return False
     if not HAS_JAPANESE_RE.search(cleaned):
+        return False
+    # Single katakana characters are OCR noise / fragment artifacts (e.g. "ク").
+    if len(cleaned) == 1 and IS_KATAKANA_RE.match(cleaned):
         return False
     if HAS_KANJI_KATA_RE.search(cleaned):
         return True

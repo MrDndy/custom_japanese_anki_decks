@@ -199,6 +199,8 @@ def test_sqlite_dictionary_lookup(tmp_path: Path):
 
 
 def test_build_offline_dictionary_prefers_sqlite(tmp_path: Path):
+    from jp_anki_builder.dictionary import CompositeDictionary
+
     dict_dir = tmp_path / "dictionaries"
     dict_dir.mkdir()
 
@@ -208,16 +210,18 @@ def test_build_offline_dictionary_prefers_sqlite(tmp_path: Path):
         encoding="utf-8",
     )
 
-    # Without sqlite, returns JSON dict
+    # Without sqlite, composite uses JSON dict as first provider
     d1 = build_offline_dictionary(str(tmp_path))
-    assert isinstance(d1, OfflineJsonDictionary)
+    assert isinstance(d1, CompositeDictionary)
+    assert isinstance(d1.providers[0], OfflineJsonDictionary)
+    assert d1.lookup("word") is not None
 
     # Create sqlite
     sqlite_path = dict_dir / "offline.db"
     OfflineSqliteDictionary.create_from_json(json_path, sqlite_path)
 
-    # Now returns sqlite dict
+    # Now composite uses SQLite dict as first provider
     d2 = build_offline_dictionary(str(tmp_path))
-    assert isinstance(d2, OfflineSqliteDictionary)
+    assert isinstance(d2, CompositeDictionary)
+    assert isinstance(d2.providers[0], OfflineSqliteDictionary)
     assert d2.lookup("word") is not None
-    d2.close()

@@ -20,9 +20,26 @@ except ImportError:
 
 
 def _build_paddleocr():
-    """Construct the PaddleOCR model (detection only, no recognition)."""
+    """Construct the PaddleOCR model (detection only, no recognition).
+
+    Tuned for manga pages:
+    - ``det_db_box_thresh=0.3``: lower than default (0.6) to catch faint or
+      small text that would otherwise be filtered out.
+    - ``det_db_unclip_ratio=2.0``: slightly larger than default (1.5) so
+      detected boxes extend a bit beyond the tight text boundary.
+    - ``det_limit_side_len=1920``: larger than default (960) so high-res
+      manga scans aren't downscaled as aggressively, preserving small text.
+    """
     from paddleocr import PaddleOCR
-    return PaddleOCR(use_angle_cls=False, lang="japan", rec=False, show_log=False)
+    return PaddleOCR(
+        use_angle_cls=False,
+        lang="japan",
+        rec=False,
+        show_log=False,
+        det_db_box_thresh=0.3,
+        det_db_unclip_ratio=2.0,
+        det_limit_side_len=1920,
+    )
 
 
 @dataclass

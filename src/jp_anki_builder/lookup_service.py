@@ -66,7 +66,12 @@ class LookupService:
             pass
 
     def lookup(self, text: str) -> TextLookupResponse:
-        """Normalize → filter particles/SFX → lookup each word → return results."""
+        """Normalize → filter particles/SFX → lookup each word → return results.
+
+        Results are sorted by proximity to the center of *text*, so the word
+        under the cursor (which sits at the center of the captured ROI) appears
+        first in the list.
+        """
         start = time.monotonic()
 
         candidates = self._normalizer.normalize_text(
@@ -74,9 +79,24 @@ class LookupService:
         )
 
         results: list[LookupResult] = []
+        # Track each result's position in the original text for center-ranking.
+        result_positions: list[int] = []
+        text_center = len(text) / 2
+
+        search_offset = 0
         for cand in candidates:
             lemma = cand.lemma
             surface = cand.surface
+
+            # Record position of this surface in the original text.
+            pos_in_text = text.find(surface, search_offset)
+            if pos_in_text >= 0:
+                search_offset = pos_in_text + len(surface)
+            else:
+                # Fallback: try from the start
+                pos_in_text = text.find(surface)
+                if pos_in_text < 0:
+                    pos_in_text = search_offset  # best guess
 
             # Filter particles and common stop-words
             if lemma in DEFAULT_PARTICLES or surface in DEFAULT_PARTICLES:
@@ -102,6 +122,14 @@ class LookupService:
                     is_in_vocab_db=in_db,
                 )
             )
+            # Distance from center of the surface's midpoint
+            surface_mid = pos_in_text + len(surface) / 2
+            result_positions.append(abs(surface_mid - text_center))
+
+        # Sort results so the word closest to the center of the text comes first.
+        if result_positions:
+            paired = sorted(zip(result_positions, results), key=lambda p: p[0])
+            results = [r for _, r in paired]
 
         elapsed_ms = (time.monotonic() - start) * 1000
         return TextLookupResponse(

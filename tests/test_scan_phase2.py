@@ -151,19 +151,19 @@ class TestScanWithRegionDetector:
         images_dir = tmp_path / "images"
         images_dir.mkdir()
         img_path = images_dir / "page.png"
-        Image.new("RGB", (100, 100)).save(str(img_path))
+        Image.new("RGB", (500, 500)).save(str(img_path))
 
         # Fake OCR provider
         class FakeProvider:
             def extract_text(self, image_path: Path) -> str:
                 return "冒険"
 
-        # Fake detector that returns two regions
+        # Fake detector that returns two regions (spaced far apart to avoid merging)
         class FakeDetector:
             def detect(self, page_image):
                 return [
                     DetectedRegion(bbox=(0, 0, 50, 50), confidence=0.9),
-                    DetectedRegion(bbox=(50, 50, 100, 100), confidence=0.8),
+                    DetectedRegion(bbox=(200, 200, 300, 300), confidence=0.8),
                 ]
 
         monkeypatch.setattr(scan_module, "build_ocr_provider",
@@ -189,8 +189,9 @@ class TestScanWithRegionDetector:
         record = payload["records"][0]
         assert "regions" in record
         assert len(record["regions"]) == 2
-        assert record["regions"][0]["bbox"] == [0, 0, 50, 50]
-        assert record["regions"][0]["confidence"] == pytest.approx(0.9)
+        bboxes = [r["bbox"] for r in record["regions"]]
+        assert [0, 0, 50, 50] in bboxes
+        assert [200, 200, 300, 300] in bboxes
 
     def test_text_from_all_regions_combined(self, tmp_path: Path, monkeypatch):
         from jp_anki_builder import scan as scan_module
@@ -199,7 +200,7 @@ class TestScanWithRegionDetector:
         images_dir = tmp_path / "images"
         images_dir.mkdir()
         img_path = images_dir / "page.png"
-        Image.new("RGB", (200, 100)).save(str(img_path))
+        Image.new("RGB", (700, 200)).save(str(img_path))
 
         region_texts = ["冒険", "勇者"]
 
@@ -216,7 +217,7 @@ class TestScanWithRegionDetector:
             def detect(self, page_image):
                 return [
                     DetectedRegion(bbox=(0, 0, 100, 100), confidence=0.9),
-                    DetectedRegion(bbox=(100, 0, 200, 100), confidence=0.85),
+                    DetectedRegion(bbox=(500, 0, 600, 100), confidence=0.85),
                 ]
 
         fake_provider = FakeProvider()

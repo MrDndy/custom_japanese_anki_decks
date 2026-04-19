@@ -544,7 +544,7 @@ class TestPhase1FiltersWithRegionDetectedText:
 
         images_dir = tmp_path / "images"
         images_dir.mkdir()
-        _make_image(images_dir / "page.png", size=(100, 100))
+        _make_image(images_dir / "page.png", size=(500, 500))
 
         normalized_called_with: list[str] = []
 
@@ -557,9 +557,11 @@ class TestPhase1FiltersWithRegionDetectedText:
 
         class FakeDetector:
             def detect(self, page_image):
+                # Regions placed far apart so they won't be merged by
+                # _merge_nearby_regions (gap_threshold=40).
                 return [
-                    DetectedRegion(bbox=(0, 0, 50, 100), confidence=0.9),
-                    DetectedRegion(bbox=(50, 0, 100, 100), confidence=0.85),
+                    DetectedRegion(bbox=(10, 10, 60, 60), confidence=0.9),
+                    DetectedRegion(bbox=(200, 200, 300, 300), confidence=0.85),
                 ]
 
         region_texts = ["冒険", "勇者"]

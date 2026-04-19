@@ -57,11 +57,13 @@ try:
             if not results:
                 self.hide()
                 return
-            for result in results:
-                self._add_word_card(result)
+            for i, result in enumerate(results):
+                self._add_word_card(result, index=i)
             self.adjustSize()
-            self._position_near_cursor(cursor_x, cursor_y)
+            # Show first so Qt computes the actual layout geometry,
+            # then reposition with the correct height.
             self.show()
+            self._position_near_cursor(cursor_x, cursor_y)
 
         def hide_results(self) -> None:
             """Hide the popup."""
@@ -93,7 +95,7 @@ try:
                 if widget is not None:
                     widget.deleteLater()
 
-        def _add_word_card(self, result: LookupResult) -> None:
+        def _add_word_card(self, result: LookupResult, index: int = 0) -> None:
             card = QFrame()
             card.setStyleSheet(
                 "QFrame {"
@@ -105,9 +107,20 @@ try:
             card_layout.setContentsMargins(10, 8, 10, 8)
             card_layout.setSpacing(3)
 
-            # Row 1: word (large) + JLPT badge
+            # Row 1: number badge + word (large) + JLPT badge
             header = QHBoxLayout()
             header.setSpacing(6)
+
+            # Circled number badge for hotkey selection (①②③...)
+            _CIRCLED_NUMBERS = "①②③④⑤⑥⑦⑧⑨"
+            num_char = _CIRCLED_NUMBERS[index] if index < len(_CIRCLED_NUMBERS) else str(index + 1)
+            num_lbl = QLabel(num_char)
+            num_lbl.setStyleSheet(
+                "color: #4FC3F7; font-size: 16px; font-weight: bold;"
+                " background: rgba(30, 80, 120, 200);"
+                " border-radius: 4px; padding: 1px 5px;"
+            )
+            header.addWidget(num_lbl, alignment=Qt.AlignmentFlag.AlignVCenter)
 
             word_lbl = QLabel(result.dictionary_form)
             word_lbl.setStyleSheet(
@@ -152,15 +165,21 @@ try:
 
             x = cursor_x + _CURSOR_OFFSET_X
             y = cursor_y + _CURSOR_OFFSET_Y
-            w = self.width()
-            h = self.height()
+
+            # Force layout so geometry is up to date.
+            self.updateGeometry()
+            QApplication.processEvents()
+
+            hint = self.sizeHint()
+            w = max(self.width(), hint.width(), 1)
+            h = max(self.height(), hint.height(), 1)
 
             # Use the screen the cursor is actually on (multi-monitor safe).
             screen = QApplication.screenAt(QPoint(cursor_x, cursor_y))
             if screen is None:
                 screen = QApplication.primaryScreen()
             if screen is not None:
-                geom = screen.geometry()
+                geom = screen.availableGeometry()
                 # Flip left/up when popup would overflow right or bottom edge.
                 if x + w > geom.right():
                     x = cursor_x - w - _CURSOR_OFFSET_X

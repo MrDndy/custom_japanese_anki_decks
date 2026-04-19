@@ -9,6 +9,8 @@ from urllib.request import Request, urlopen
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from jp_anki_builder.yomichan_dict import YomichanDictionary
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,12 +19,17 @@ class OfflineJsonDictionary:
     path: Path
     _cache_payload: dict | None = None
     _cache_mtime_ns: int | None = None
+    _reading_index: dict | None = None
 
     def lookup(self, word: str, exact_match: bool = False):
         payload = self._load_payload()
         if payload is None:
             return None
         hit = payload.get(word)
+        if hit is None and self._reading_index is not None:
+            # Fallback: match by reading so hiragana forms like かかる
+            # find their kanji entry 掛かる.
+            hit = self._reading_index.get(word)
         if hit is not None:
             logger.debug("offline hit: %s", word)
         return hit
@@ -42,6 +49,13 @@ class OfflineJsonDictionary:
         payload = json.loads(self.path.read_text(encoding="utf-8-sig"))
         self._cache_payload = payload
         self._cache_mtime_ns = mtime_ns
+        # Build reading→entry index for hiragana fallback lookups.
+        reading_idx: dict = {}
+        for entry in payload.values():
+            reading = entry.get("reading")
+            if reading and reading not in payload and reading not in reading_idx:
+                reading_idx[reading] = entry
+        self._reading_index = reading_idx
         return payload
 
 
@@ -56,6 +70,13 @@ class OfflineSqliteDictionary:
         if not self.path.exists():
             return None
         self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
+        # Ensure reading index exists for hiragana fallback lookups.
+        try:
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entries_reading ON entries(reading)"
+            )
+        except sqlite3.OperationalError:
+            pass
         return self._conn
 
     def lookup(self, word: str, exact_match: bool = False):
@@ -65,6 +86,13 @@ class OfflineSqliteDictionary:
         row = conn.execute(
             "SELECT reading, meanings FROM entries WHERE word = ?", (word,)
         ).fetchone()
+        if row is None:
+            # Fallback: match by reading so hiragana forms like かかる
+            # find their kanji entry 掛かる.
+            row = conn.execute(
+                "SELECT reading, meanings FROM entries WHERE reading = ?",
+                (word,),
+            ).fetchone()
         if row is None:
             return None
         logger.debug("sqlite hit: %s", word)
@@ -165,15 +193,91 @@ class JishoOnlineDictionary:
         return {"reading": reading, "meanings": meanings}
 
 
+@dataclass
+class YomichanDictionaryProvider:
+    """Dictionary provider backed by imported Yomichan dictionaries.
+
+    Loads all ``.zip`` files from *dict_dir* as Yomichan dictionaries.
+    Returns the first hit across all loaded dictionaries in ``lookup()``.
+    """
+
+    dict_dir: Path
+    _dicts: list[YomichanDictionary] = field(default_factory=list, repr=False)
+    _loaded: bool = field(default=False, repr=False)
+
+    def _ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        self._loaded = True
+        if not self.dict_dir.exists():
+            return
+        for zip_path in sorted(self.dict_dir.glob("*.zip")):
+            try:
+                d = YomichanDictionary.from_zip(zip_path)
+                self._dicts.append(d)
+                logger.info("loaded Yomichan dict %r from %s", d.title, zip_path)
+            except (ValueError, OSError) as exc:
+                logger.warning("skipping invalid Yomichan ZIP %s: %s", zip_path, exc)
+
+    def lookup(self, word: str, exact_match: bool = False):
+        self._ensure_loaded()
+        for d in self._dicts:
+            entries = d.lookup(word)
+            if not entries:
+                continue
+            # Prefer entry with highest score
+            best = max(entries, key=lambda e: e.score)
+            reading = best.reading
+            meanings = best.meanings
+            if not reading and not meanings:
+                continue
+            logger.debug("yomichan hit: %s -> %s", word, reading)
+            return {"reading": reading, "meanings": meanings}
+        return None
+
+
+@dataclass
+class CompositeDictionary:
+    """Chains multiple dictionary providers; returns the first non-None result."""
+
+    providers: list = field(default_factory=list)
+
+    def lookup(self, word: str, exact_match: bool = False):
+        for provider in self.providers:
+            result = provider.lookup(word, exact_match=exact_match)
+            if result is not None:
+                return result
+        return None
+
+
+def _sqlite_has_entries(path: Path) -> bool:
+    """Check whether the SQLite file actually has the entries table."""
+    try:
+        conn = sqlite3.connect(str(path))
+        row = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entries'"
+        ).fetchone()
+        conn.close()
+        return row is not None
+    except sqlite3.Error:
+        return False
+
+
 def build_offline_dictionary(base_dir: str = "data"):
-    """Factory: returns SQLite dictionary if available, else JSON."""
+    """Factory: returns a composite of JMdict (SQLite/JSON) + any Yomichan dicts."""
     sqlite_path = Path(base_dir) / "dictionaries" / "offline.db"
     json_path = Path(base_dir) / "dictionaries" / "offline.json"
-    if sqlite_path.exists():
+    yomichan_dir = Path(base_dir) / "dictionaries" / "yomichan"
+
+    if sqlite_path.exists() and _sqlite_has_entries(sqlite_path):
         logger.debug("using SQLite offline dictionary: %s", sqlite_path)
-        return OfflineSqliteDictionary(sqlite_path)
-    logger.debug("using JSON offline dictionary: %s", json_path)
-    return OfflineJsonDictionary(json_path)
+        jmdict = OfflineSqliteDictionary(sqlite_path)
+    else:
+        logger.debug("using JSON offline dictionary: %s", json_path)
+        jmdict = OfflineJsonDictionary(json_path)
+
+    yomichan = YomichanDictionaryProvider(dict_dir=yomichan_dir)
+    return CompositeDictionary(providers=[jmdict, yomichan])
 
 
 def build_online_dictionary(mode: str):

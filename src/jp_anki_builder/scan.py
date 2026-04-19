@@ -6,6 +6,13 @@ import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+# Pre-import torch before PaddlePaddle so torch's native DLLs load first.
+# On Windows, importing paddle before torch corrupts torch's DLL search state.
+try:
+    import torch as _torch  # noqa: F401
+except ImportError:
+    pass
+
 from jp_anki_builder.config import RunPaths
 from jp_anki_builder.dictionary import WordExistsCache, build_offline_dictionary, build_online_dictionary
 from jp_anki_builder.normalization import get_default_normalizer
@@ -149,13 +156,108 @@ def _ocr_pil_image(provider, pil_image, tmp_dir: Path) -> list[str]:
     return [provider.extract_text(tmp_path)]
 
 
+def _merge_nearby_regions(
+    regions: list,
+    gap_threshold: int = 40,
+    max_cluster_dim: int = 400,
+) -> list:
+    """Merge detected regions that are spatially close into larger clusters.
+
+    PaddleOCR's text detection finds individual text lines/fragments rather
+    than full speech bubbles.  manga-ocr produces far better results when
+    given a complete bubble, so we merge nearby bounding boxes first.
+
+    Uses a simple iterative union approach: for each region, if its bbox is
+    within *gap_threshold* pixels of any existing cluster, merge it in;
+    otherwise start a new cluster.
+
+    *max_cluster_dim* caps the width or height of a merged cluster.  If a
+    merge would produce a cluster larger than this on either axis, the merge
+    is skipped.  This prevents separate speech bubbles that happen to be
+    near each other from being combined into one huge region that confuses
+    the OCR model.
+    """
+    from jp_anki_builder.ocr import DetectedRegion
+
+    if not regions:
+        return []
+
+    def _expanded(bbox, gap):
+        return (bbox[0] - gap, bbox[1] - gap, bbox[2] + gap, bbox[3] + gap)
+
+    def _overlaps(a, b):
+        return a[0] <= b[2] and a[2] >= b[0] and a[1] <= b[3] and a[3] >= b[1]
+
+    def _merged_box(a, b):
+        return [min(a[0], b[0]), min(a[1], b[1]),
+                max(a[2], b[2]), max(a[3], b[3])]
+
+    def _fits(box):
+        return (box[2] - box[0]) <= max_cluster_dim and (box[3] - box[1]) <= max_cluster_dim
+
+    # Each cluster is [x1, y1, x2, y2]
+    clusters: list[list[int]] = []
+    for region in regions:
+        x1, y1, x2, y2 = region.bbox
+        merged = False
+        for i, cl in enumerate(clusters):
+            if _overlaps(_expanded(cl, gap_threshold), (x1, y1, x2, y2)):
+                candidate = _merged_box(cl, [x1, y1, x2, y2])
+                if _fits(candidate):
+                    clusters[i] = candidate
+                    merged = True
+                    break
+        if not merged:
+            clusters.append([x1, y1, x2, y2])
+
+    # Repeat merging until stable (handles transitive merges)
+    changed = True
+    while changed:
+        changed = False
+        new_clusters: list[list[int]] = []
+        used = [False] * len(clusters)
+        for i in range(len(clusters)):
+            if used[i]:
+                continue
+            cl = list(clusters[i])
+            for j in range(i + 1, len(clusters)):
+                if used[j]:
+                    continue
+                if _overlaps(_expanded(cl, gap_threshold), clusters[j]):
+                    candidate = _merged_box(cl, clusters[j])
+                    if _fits(candidate):
+                        cl = candidate
+                        used[j] = True
+                        changed = True
+            new_clusters.append(cl)
+        clusters = new_clusters
+
+    return [
+        DetectedRegion(
+            bbox=(cl[0], cl[1], cl[2], cl[3]),
+            confidence=1.0,
+            region_type="text",
+        )
+        for cl in clusters
+    ]
+
+
+_CROP_PADDING_PX = 10  # extra pixels around each region crop for OCR context
+
+
 def _ocr_region_crops(provider, pil_image, regions, tmp_dir: Path) -> tuple[list[str], list[dict]]:
     """Crop each detected region, OCR it, and return aggregated texts + region records."""
+    img_w, img_h = pil_image.size
     region_texts: list[str] = []
     region_records: list[dict] = []
     for j, region in enumerate(regions):
         x1, y1, x2, y2 = region.bbox
-        crop = pil_image.crop((x1, y1, x2, y2))
+        # Add padding, clamped to image bounds
+        px1 = max(0, x1 - _CROP_PADDING_PX)
+        py1 = max(0, y1 - _CROP_PADDING_PX)
+        px2 = min(img_w, x2 + _CROP_PADDING_PX)
+        py2 = min(img_h, y2 + _CROP_PADDING_PX)
+        crop = pil_image.crop((px1, py1, px2, py2))
         crop_path = tmp_dir / f"crop_{j}.png"
         crop.save(str(crop_path))
         text = provider.extract_text(crop_path)
@@ -278,7 +380,12 @@ def run_scan(
                 import numpy as np
                 pil_img = PILImage.open(image_path).convert("RGB")
                 np_img = np.array(pil_img)
-                regions = detector.detect(np_img)
+                raw_regions = detector.detect(np_img)
+                regions = _merge_nearby_regions(raw_regions, gap_threshold=40)
+                logger.debug(
+                    "merged %d raw regions → %d clusters",
+                    len(raw_regions), len(regions),
+                )
 
                 with tempfile.TemporaryDirectory() as tmp_raw:
                     tmp_dir = Path(tmp_raw)
@@ -352,7 +459,8 @@ def run_scan(
                     # Region-aware OCR on container page image
                     import numpy as np
                     np_img = np.array(pil_image)
-                    regions = detector.detect(np_img)
+                    raw_regions = detector.detect(np_img)
+                    regions = _merge_nearby_regions(raw_regions, gap_threshold=40)
                     region_texts, region_records_for_json = _ocr_region_crops(
                         provider, pil_image, regions, tmp_dir
                     )

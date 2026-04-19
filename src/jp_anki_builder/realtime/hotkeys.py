@@ -15,9 +15,9 @@ except ImportError:
     pass
 
 # Default hotkey strings — callers can override via project_config.
-DEFAULT_HOTKEY_SCAN = "ctrl+shift"
-DEFAULT_HOTKEY_ADD_WORD = "ctrl+shift+a"
-DEFAULT_HOTKEY_EXPORT = "ctrl+shift+e"
+DEFAULT_HOTKEY_SCAN = "shift"
+DEFAULT_HOTKEY_ADD_WORD = "shift+q"
+DEFAULT_HOTKEY_EXPORT = "shift+e"
 
 # Modifier names that should be normalised from their left/right variants.
 _MODIFIER_PREFIXES = ("ctrl", "shift", "alt", "cmd")
@@ -58,8 +58,17 @@ def _canonicalize_key(key) -> str | None:
         return name
 
     if isinstance(key, KeyCode):
+        # On Windows, Shift changes number keys to symbols (1→!, 2→@, etc.)
+        # Use the virtual key code to recover the unshifted character.
+        _SHIFTED_NUMBERS = {"!": "1", "@": "2", "#": "3", "$": "4", "%": "5",
+                            "^": "6", "&": "7", "*": "8", "(": "9"}
         if key.char is not None:
-            return key.char.lower()
+            ch = key.char.lower()
+            return _SHIFTED_NUMBERS.get(ch, ch)
+        # Fallback: check vk for number keys (0x30–0x39)
+        vk = getattr(key, "vk", None)
+        if vk is not None and 0x30 <= vk <= 0x39:
+            return str(vk - 0x30)
 
     return None
 
