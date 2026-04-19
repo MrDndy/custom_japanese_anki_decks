@@ -655,6 +655,23 @@ try:
             """Update the status bar message."""
             self._status_bar.showMessage(message)
 
+        def closeEvent(self, event) -> None:  # noqa: N802
+            """Clean up worker threads and overlay before closing."""
+            if self._active_worker is not None and self._active_worker.isRunning():
+                self._active_worker.requestInterruption()
+                self._active_worker.wait(3000)
+            worker = getattr(self, "_dict_install_worker", None)
+            if worker is not None and worker.isRunning():
+                worker.requestInterruption()
+                worker.wait(3000)
+            if self._overlay_app is not None:
+                try:
+                    self._overlay_app.shutdown()
+                except Exception:
+                    pass
+                self._overlay_app = None
+            super().closeEvent(event)
+
         # ------------------------------------------------------------------
         # Slot stubs (wired in Task 4.06)
         # ------------------------------------------------------------------
