@@ -7,6 +7,10 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from jp_anki_builder.scan import ScanSummary
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +213,7 @@ def run_scan_subs(
     base_dir: str = "data",
     online_dict: str = "off",
     track_index: int | None = None,
-) -> object:
+) -> ScanSummary:
     """Extract Japanese subtitles from a video and produce a scan.json artifact.
 
     Returns a ``ScanSummary`` compatible with the existing review/build pipeline.
