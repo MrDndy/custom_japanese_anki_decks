@@ -96,10 +96,11 @@ def _confidence_tier(row: _CandidateRow) -> str:
 
 
 try:
-    from PySide6.QtCore import Qt, Signal
+    from PySide6.QtCore import QThread, Qt, Signal
     from PySide6.QtGui import QColor
     from PySide6.QtWidgets import (
         QAbstractItemView,
+        QApplication,
         QFrame,
         QHBoxLayout,
         QLabel,
@@ -113,6 +114,74 @@ try:
     )
 
     _PYSIDE6_AVAILABLE = True
+
+    # -----------------------------------------------------------------------
+    # Background worker for candidate enrichment
+    # -----------------------------------------------------------------------
+
+    class _CandidateEnrichWorker(QThread):
+        """Builds dictionary/JLPT lookups and enriches candidates off the main thread."""
+
+        finished = Signal(list)  # list[_CandidateRow]
+
+        def __init__(
+            self,
+            candidates: list[str],
+            conf_meta: dict[str, dict],
+            data_dir: str,
+            known_words: set[str],
+            seen_words: set[str],
+        ) -> None:
+            super().__init__()
+            self._candidates = candidates
+            self._conf_meta = conf_meta
+            self._data_dir = data_dir
+            self._known_words = known_words
+            self._seen_words = seen_words
+
+        def run(self) -> None:
+            from jp_anki_builder.dictionary import build_offline_dictionary
+            from jp_anki_builder.filtering import is_sfx_token
+            from jp_anki_builder.jlpt import build_jlpt_lookup
+
+            offline_dict = build_offline_dictionary(self._data_dir)
+            jlpt = build_jlpt_lookup(self._data_dir)
+
+            rows: list[_CandidateRow] = []
+            for lemma in self._candidates:
+                meta = self._conf_meta.get(lemma, {})
+                confidence = float(meta.get("confidence", 0.0))
+                reason = meta.get("reason", "")
+                surface = meta.get("surface", lemma)
+
+                entry = offline_dict.lookup(lemma) or {}
+                reading = entry.get("reading", "")
+                meanings: list[str] = entry.get("meanings", [])
+                meaning = meanings[0] if meanings else ""
+
+                flags: list[str] = []
+                if not entry:
+                    flags.append("OOV")
+                if is_sfx_token(lemma):
+                    flags.append("SFX")
+                if confidence < _CONF_HIGH or reason == "surface_fallback":
+                    flags.append("low-conf")
+
+                jlpt_level = jlpt.level_tag(lemma)
+                approved = lemma not in self._known_words and lemma not in self._seen_words
+
+                rows.append(_CandidateRow(
+                    lemma=lemma,
+                    surface=surface,
+                    reading=reading,
+                    meaning=meaning,
+                    confidence=confidence,
+                    confidence_reason=reason,
+                    jlpt_level=jlpt_level,
+                    flags=flags,
+                    approved=approved,
+                ))
+            self.finished.emit(rows)
 
     # -----------------------------------------------------------------------
     # Custom table item for numeric sort on the Confidence column
@@ -212,69 +281,45 @@ QLabel { color: #AAAAAA; background: transparent; font-size: 11px; }
         # ------------------------------------------------------------------
 
         def load_candidates(self, scan_path: Path, source: str) -> None:
-            """Load candidates from *scan_path* and populate the table."""
+            """Load candidates from *scan_path* and enrich in a background thread."""
             self._scan_path = scan_path
             self._source = source
 
             candidates, conf_meta = _load_scan_data(scan_path)
 
-            # Derive data_dir from scan_path: scan.json → run_dir → source_dir → data_dir
             data_dir_path = scan_path.parent.parent.parent
             known_path = data_dir_path / source / "known_words.txt"
             seen_path = data_dir_path / source / "seen_words.json"
             known_words = _load_known_words(known_path)
             seen_words = _load_seen_words(seen_path)
 
-            # Build dictionary + JLPT lookups (lazy, one-off)
-            from jp_anki_builder.dictionary import build_offline_dictionary
-            from jp_anki_builder.filtering import is_sfx_token
-            from jp_anki_builder.jlpt import build_jlpt_lookup
+            self._enrich_worker = _CandidateEnrichWorker(
+                candidates=candidates,
+                conf_meta=conf_meta,
+                data_dir=str(data_dir_path),
+                known_words=known_words,
+                seen_words=seen_words,
+            )
+            self._enrich_worker.finished.connect(self._on_enrich_finished)
+            self._enrich_worker.start()
 
-            offline_dict = build_offline_dictionary(str(data_dir_path))
-            jlpt = build_jlpt_lookup(str(data_dir_path))
-
-            rows: list[_CandidateRow] = []
-            for lemma in candidates:
-                meta = conf_meta.get(lemma, {})
-                confidence = float(meta.get("confidence", 0.0))
-                reason = meta.get("reason", "")
-                surface = meta.get("surface", lemma)
-
-                # Dictionary lookup
-                entry = offline_dict.lookup(lemma) or {}
-                reading = entry.get("reading", "")
-                meanings: list[str] = entry.get("meanings", [])
-                meaning = meanings[0] if meanings else ""
-
-                # Flags
-                flags: list[str] = []
-                if not entry:
-                    flags.append("OOV")
-                if is_sfx_token(lemma):
-                    flags.append("SFX")
-                if confidence < _CONF_HIGH or reason == "surface_fallback":
-                    flags.append("low-conf")
-
-                jlpt_level = jlpt.level_tag(lemma)
-
-                # Pre-approve: default to True unless it's in known/seen
-                approved = lemma not in known_words and lemma not in seen_words
-
-                rows.append(_CandidateRow(
-                    lemma=lemma,
-                    surface=surface,
-                    reading=reading,
-                    meaning=meaning,
-                    confidence=confidence,
-                    confidence_reason=reason,
-                    jlpt_level=jlpt_level,
-                    flags=flags,
-                    approved=approved,
-                ))
-
+        def _on_enrich_finished(self, rows: list) -> None:
+            """Populate the table once background enrichment completes."""
             self._rows = rows
             self._populate_table()
             self._update_count_label()
+
+        def wait_for_load(self, timeout_ms: int = 10000) -> None:
+            """Block until the background enrichment worker finishes.
+
+            Intended for tests — processes Qt events so signals are delivered.
+            """
+            worker = getattr(self, "_enrich_worker", None)
+            if worker is None or not worker.isRunning():
+                QApplication.processEvents()
+                return
+            worker.wait(timeout_ms)
+            QApplication.processEvents()
 
         def approved_lemmas(self) -> list[str]:
             """Return list of currently approved lemmas (checkbox checked)."""

@@ -171,6 +171,7 @@ class TestReviewPanelGUI:
         ])
         panel = ReviewPanel(data_dir=str(tmp_path))
         panel.load_candidates(scan_path, "testshow")
+        panel.wait_for_load()
         assert panel._table.rowCount() == 2
 
     def test_all_approved_by_default(self, qt_app, tmp_path):
@@ -180,6 +181,7 @@ class TestReviewPanelGUI:
         scan_path = self._make_scan(tmp_path, [("食べる", 0.95, "dict_lookup")])
         panel = ReviewPanel(data_dir=str(tmp_path))
         panel.load_candidates(scan_path, "testshow")
+        panel.wait_for_load()
 
         item = panel._table.item(0, 0)  # checkbox column
         assert item.checkState() == Qt.CheckState.Checked
@@ -193,6 +195,7 @@ class TestReviewPanelGUI:
         ])
         panel = ReviewPanel(data_dir=str(tmp_path))
         panel.load_candidates(scan_path, "testshow")
+        panel.wait_for_load()
 
         approved = panel.approved_lemmas()
         assert "食べる" in approved
@@ -208,6 +211,7 @@ class TestReviewPanelGUI:
         ])
         panel = ReviewPanel(data_dir=str(tmp_path))
         panel.load_candidates(scan_path, "testshow")
+        panel.wait_for_load()
 
         # Uncheck first
         panel._table.item(0, _COL_APPROVE).setCheckState(Qt.CheckState.Unchecked)
@@ -225,6 +229,7 @@ class TestReviewPanelGUI:
         scan_path = self._make_scan(tmp_path, [("ドドド", 0.3, "surface_fallback")])
         panel = ReviewPanel(data_dir=str(tmp_path))
         panel.load_candidates(scan_path, "testshow")
+        panel.wait_for_load()
 
         # Manually mark as OOV if not already
         flags_item = panel._table.item(0, _COL_FLAGS)
@@ -245,6 +250,7 @@ class TestReviewPanelGUI:
         ])
         panel = ReviewPanel(data_dir=str(tmp_path))
         panel.load_candidates(scan_path, "testshow")
+        panel.wait_for_load()
 
         panel._search_bar.setText("食べ")
 
@@ -265,6 +271,7 @@ class TestReviewPanelGUI:
         ])
         panel = ReviewPanel(data_dir=str(tmp_path))
         panel.load_candidates(scan_path, "testshow")
+        panel.wait_for_load()
 
         panel._table.item(0, _COL_APPROVE).setCheckState(Qt.CheckState.Unchecked)
         panel._update_count_label()
@@ -276,6 +283,7 @@ class TestReviewPanelGUI:
         scan_path = self._make_scan(tmp_path, [("食べる", 0.95, "dict_lookup")])
         panel = ReviewPanel(data_dir=str(tmp_path))
         panel.load_candidates(scan_path, "testshow")
+        panel.wait_for_load()
 
         emitted: list[list[str]] = []
         panel.review_completed.connect(lambda lst: emitted.append(lst))
@@ -291,6 +299,7 @@ class TestReviewPanelGUI:
         scan_path = self._make_scan(tmp_path, [("食べる", 0.95, "dict_lookup")])
         panel = ReviewPanel(data_dir=str(tmp_path))
         panel.load_candidates(scan_path, "testshow")
+        panel.wait_for_load()
 
         # Reject the word
         panel._table.item(0, _COL_APPROVE).setCheckState(Qt.CheckState.Unchecked)
