@@ -176,8 +176,8 @@ try:
             finally:
                 try:
                     lookup_service.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("lookup_service close error: %s", exc)
                 self.status_changed.emit("idle")
 
     class RealtimeController(QObject):
