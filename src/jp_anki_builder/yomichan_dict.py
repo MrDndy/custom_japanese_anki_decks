@@ -112,7 +112,7 @@ class YomichanDictionary:
         return self.entries.get(word, [])
 
 
-def _flatten_glossary(glossary) -> str:
+def _flatten_glossary(glossary: str | dict) -> str:
     """Flatten a glossary item to plain text.
 
     Glossary items can be:
@@ -137,7 +137,7 @@ def _flatten_glossary(glossary) -> str:
     return str(glossary.get("text", "")).strip()
 
 
-def _flatten_structured_content(content) -> str:
+def _flatten_structured_content(content: str | list | dict) -> str:
     """Recursively extract plain text from structured-content nodes."""
     if isinstance(content, str):
         return content
