@@ -134,6 +134,20 @@ try:
             self.shutdown()
             return exit_code
 
+        def start_components(self) -> None:
+            """Start hotkeys and show panels without entering the event loop.
+
+            Use this when embedding the overlay inside an existing QApplication
+            (e.g. the main GUI window) instead of calling ``run()``.
+            """
+            try:
+                self._hotkeys.start()
+            except RuntimeError as exc:
+                logger.warning("hotkey manager unavailable: %s", exc)
+            if self._owns_buffer_panel:
+                self._buffer_panel.show()
+            logger.info("overlay components started — hold %s to scan", self._hotkey_scan)
+
         def shutdown(self) -> None:
             """Clean shutdown: stop scanning, stop hotkeys, close overlay."""
             try:

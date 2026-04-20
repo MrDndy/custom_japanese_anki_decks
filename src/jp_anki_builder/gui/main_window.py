@@ -895,11 +895,7 @@ try:
                     hotkey_export=cfg.hotkey_export or "shift+e",
                     buffer_panel=self._buffer_panel,
                 )
-                # Start components without calling exec() — we're already in an event loop
-                try:
-                    self._overlay_app._hotkeys.start()
-                except RuntimeError as exc:
-                    logger.warning("hotkey manager unavailable: %s", exc)
+                self._overlay_app.start_components()
                 self._launch_overlay_btn.setEnabled(False)
                 self._stop_overlay_btn.setEnabled(True)
                 self.set_status("Overlay launched.")
