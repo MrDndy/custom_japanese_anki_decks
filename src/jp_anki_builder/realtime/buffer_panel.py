@@ -26,6 +26,17 @@ try:
 
     _PYSIDE6_AVAILABLE = True
 
+    def _button_style(bg: str, hover_bg: str) -> str:
+        return (
+            f"QPushButton {{"
+            f"  color: #FFFFFF; font-size: 12px;"
+            f"  background: {bg};"
+            f"  border: none; border-radius: 5px;"
+            f"  padding: 5px 12px;"
+            f"}}"
+            f"QPushButton:hover {{ background: {hover_bg}; }}"
+        )
+
     class BufferPanel(QWidget):
         """Panel showing words added during the current session.
 
@@ -293,15 +304,3 @@ except ImportError:
 
         def show_export_success(self, deck_path: str) -> None:  # noqa: ARG002
             raise ImportError("The buffer panel requires PySide6.")
-
-
-def _button_style(bg: str, hover_bg: str) -> str:
-    return (
-        f"QPushButton {{"
-        f"  color: #FFFFFF; font-size: 12px;"
-        f"  background: {bg};"
-        f"  border: none; border-radius: 5px;"
-        f"  padding: 5px 12px;"
-        f"}}"
-        f"QPushButton:hover {{ background: {hover_bg}; }}"
-    )
