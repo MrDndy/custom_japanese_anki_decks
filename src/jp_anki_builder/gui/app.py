@@ -1,7 +1,10 @@
 """Entry point for launching the GUI application."""
 from __future__ import annotations
 
+import logging
 import sys
+
+logger = logging.getLogger(__name__)
 
 try:
     from PySide6.QtWidgets import QApplication
