@@ -22,6 +22,10 @@ DEFAULT_HOTKEY_EXPORT = "shift+e"
 # Modifier names that should be normalised from their left/right variants.
 _MODIFIER_PREFIXES = ("ctrl", "shift", "alt", "cmd")
 
+# On Windows, Shift changes number keys to symbols (1→!, 2→@, etc.)
+_SHIFTED_NUMBERS = {"!": "1", "@": "2", "#": "3", "$": "4", "%": "5",
+                    "^": "6", "&": "7", "*": "8", "(": "9"}
+
 
 def _parse_hotkey(hotkey_str: str) -> frozenset[str]:
     """Parse a ``+``-separated hotkey string into a frozenset of canonical key names.
@@ -58,10 +62,6 @@ def _canonicalize_key(key) -> str | None:
         return name
 
     if isinstance(key, KeyCode):
-        # On Windows, Shift changes number keys to symbols (1→!, 2→@, etc.)
-        # Use the virtual key code to recover the unshifted character.
-        _SHIFTED_NUMBERS = {"!": "1", "@": "2", "#": "3", "$": "4", "%": "5",
-                            "^": "6", "&": "7", "*": "8", "(": "9"}
         if key.char is not None:
             ch = key.char.lower()
             return _SHIFTED_NUMBERS.get(ch, ch)
