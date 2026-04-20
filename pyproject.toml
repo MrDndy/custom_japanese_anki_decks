@@ -40,6 +40,9 @@ paddle = [
 screen_capture = [
   "dxcam>=0.0.5",
 ]
+gui = [
+  "PySide6>=6.6.0",
+]
 realtime = [
   "PySide6>=6.6.0",
   "dxcam>=0.0.5",
