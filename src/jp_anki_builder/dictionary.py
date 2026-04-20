@@ -8,6 +8,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from jp_anki_builder.yomichan_dict import YomichanDictionary
 
@@ -240,7 +241,7 @@ class YomichanDictionaryProvider:
 class CompositeDictionary:
     """Chains multiple dictionary providers; returns the first non-None result."""
 
-    providers: list = field(default_factory=list)
+    providers: list[Any] = field(default_factory=list)
 
     def lookup(self, word: str, exact_match: bool = False):
         for provider in self.providers:
