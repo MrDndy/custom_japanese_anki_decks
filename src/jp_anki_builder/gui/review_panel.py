@@ -124,6 +124,7 @@ try:
         """Builds dictionary/JLPT lookups and enriches candidates off the main thread."""
 
         finished = Signal(list)  # list[_CandidateRow]
+        error = Signal(str)
 
         def __init__(
             self,
@@ -145,8 +146,14 @@ try:
             from jp_anki_builder.filtering import is_sfx_token
             from jp_anki_builder.jlpt import build_jlpt_lookup
 
-            offline_dict = build_offline_dictionary(self._data_dir)
-            jlpt = build_jlpt_lookup(self._data_dir)
+            try:
+                offline_dict = build_offline_dictionary(self._data_dir)
+                jlpt = build_jlpt_lookup(self._data_dir)
+            except Exception as exc:
+                logger.exception("Failed to build dictionary/JLPT for review")
+                self.error.emit(str(exc))
+                self.finished.emit([])
+                return
 
             rows: list[_CandidateRow] = []
             for lemma in self._candidates:
@@ -283,6 +290,11 @@ QLabel { color: #AAAAAA; background: transparent; font-size: 11px; }
 
         def load_candidates(self, scan_path: Path, source: str) -> None:
             """Load candidates from *scan_path* and enrich in a background thread."""
+            worker = getattr(self, "_enrich_worker", None)
+            if worker is not None and worker.isRunning():
+                worker.requestInterruption()
+                worker.wait(2000)
+
             self._scan_path = scan_path
             self._source = source
 
