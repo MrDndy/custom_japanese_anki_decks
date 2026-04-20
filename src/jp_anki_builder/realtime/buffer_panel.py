@@ -1,3 +1,4 @@
+"""Floating session word list panel for the real-time overlay."""
 from __future__ import annotations
 
 import logging

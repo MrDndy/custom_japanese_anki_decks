@@ -1,3 +1,4 @@
+"""Yomichan/Yomitan dictionary ZIP parser and lookup."""
 from __future__ import annotations
 
 import json

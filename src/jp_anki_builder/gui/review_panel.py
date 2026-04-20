@@ -1,3 +1,4 @@
+"""Interactive word review panel for batch scan results."""
 from __future__ import annotations
 
 import json

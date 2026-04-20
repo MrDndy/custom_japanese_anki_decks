@@ -1,3 +1,4 @@
+"""QThread workers for running pipeline stages off the main thread."""
 from __future__ import annotations
 
 import json
